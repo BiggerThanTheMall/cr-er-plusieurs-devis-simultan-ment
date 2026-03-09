@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Création de Devis en Masse (iFrames)
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  Permet de créer plusieurs devis simultanément via iframes cachées (vraiment en arrière-plan)
 // @author       LTOA Assurances
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
@@ -140,16 +140,17 @@
                     align-items: center;
                 }
 
-                .bulk-estimate-modal {
-                    background: #fff;
-                    border-radius: 4px;
-                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-                    max-width: 1100px;
-                    width: 95%;
-                    max-height: 90vh;
-                    display: flex;
-                    flex-direction: column;
-                }
+.bulk-estimate-modal {
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    max-width: 1280px;
+    width: 96vw;
+    height: 92vh;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+}
 
                 .bulk-estimate-header {
                     background: var(--color-header-background, #215c7f);
@@ -177,11 +178,12 @@
                     line-height: 1;
                 }
 
-                .bulk-estimate-body {
-                    padding: 20px;
-                    overflow-y: auto;
-                    flex: 1;
-                }
+.bulk-estimate-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
 
                 .bulk-estimate-section {
                     margin-bottom: 20px;
@@ -232,22 +234,35 @@
                     flex: 1;
                 }
 
-                .bulk-estimate-table-container {
-                    display: flex;
-                    gap: 20px;
-                    align-items: flex-start;
-                }
+.bulk-estimate-table-container {
+    display: flex;
+    gap: 20px;
+    align-items: stretch;
+    min-height: 420px;
+    max-height: calc(92vh - 330px);
+}
 
-                .bulk-estimate-table-wrapper {
-                    flex: 1;
-                    overflow-x: auto;
-                }
+.bulk-estimate-table-wrapper {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: auto;
+    min-height: 300px;
+    max-height: 100%;
+}
 
                 .bulk-estimate-selected-table {
                     width: 100%;
                     border-collapse: collapse;
                 }
+.bulk-estimate-selected-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
 
+.bulk-estimate-selected-table tbody td {
+    vertical-align: top;
+}
                 .bulk-estimate-selected-table th,
                 .bulk-estimate-selected-table td {
                     padding: 8px 10px;
