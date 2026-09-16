@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         Modulr - Création de Devis en Masse (iFrames)
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      1.7
 // @description  Permet de créer plusieurs devis simultanément via iframes cachées (vraiment en arrière-plan)
 // @author       LTOA Assurances
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @match        https://*.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/BiggerThanTheMall/tampermonkey-ltoa/main/userscripts/modulr-creation-devis-en-masse-iframes.user.js
-// @updateURL    https://raw.githubusercontent.com/BiggerThanTheMall/tampermonkey-ltoa/main/userscripts/modulr-creation-devis-en-masse-iframes.user.js
+// @downloadURL  https://raw.githubusercontent.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment/main/modulr-creation-devis-en-masse-iframes.user.js
+// @updateURL    https://raw.githubusercontent.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment/main/modulr-creation-devis-en-masse-iframes.user.js
 // ==/UserScript==
 
 (function() {
