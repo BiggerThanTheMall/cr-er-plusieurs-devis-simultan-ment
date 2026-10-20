@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Devis en masse Fetch (beta)
 // @namespace    https://github.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment
-// @version      2.0.0-beta.2
+// @version      2.0.0-beta.3
 // @description  Creation de devis sur la session Modulr de chaque collaborateur, sans cookies integres.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
@@ -11,6 +11,7 @@
   const TYPES = [["2 roues",20],["Animaux",58],["Assurance scolaire",49],["Assurance Vie",53],["Assurance voyage",8],["Audit Assurance Global",40],["Automobile",2],["Dommage ouvrage",10],["Emprunteur",26],["Epargne Salariale",60],["Extension santé - Renfort ou Ayant Droit",52],["Flotte auto",6],["Flotte immeubles",7],["Habitation principale",1],["Habitation secondaire",11],["Marchandises transportées",13],["MRC",30],["MRH",3],["MRI",29],["MRP",41],["Perte d'exploitation",14],["PJ",15],["PNO",23],["Prévoyance collective C",28],["Prévoyance collective EP",48],["Prévoyance collective NC",47],["Prévoyance Décès",38],["Prévoyance Frais Généraux Permanents (FGP)",35],["Prévoyance Garantie Accident de la Vie",32],["Prévoyance Homme Clé",36],["Prévoyance Indemnité Journalière Hospitalisation (IJH)",34],["Prévoyance Individuelle TNS",27],["Prévoyance Mandataire Sociale",37],["Prévoyance Obsèques",33],["Rapatriement (GRC)",44],["RC Batiment",55],["RC constructeur",16],["RC décennale",17],["RC des dirigeants",18],["RC Marchandise",42],["RC PRO",25],["RC Terrain",62],["RC Vie privée",24],["RCMS",61],["Retraite",50],["Santé collective C",45],["Santé collective EP",46],["Santé collective NC",19],["Santé Individuelle Particulier",5],["Santé Individuelle TNS",39],["Surcomplémentaire Santé",43],["Surcomplémentaire Santé Non Résponsable",56],["TRC - Tous risques chantier",51],["Vie",9],["ZZZ_Biennale",57],["ZZZ_Libre2",21],["ZZZ_Libre3",54],["ZZZ_Libre4",4],["ZZZ_Libre5",12],["ZZZ_Libre6",22]];
   const BINOMES = [['', 'Aucun'], ['138','Eddy'],['144','Ghais'],['141','Jake'],['217','Louli'],['139','Nadia'],['163','Youness'],['140','ZZZ_Faicel'],['142','ZZZ_Inssaf'],['143','ZZZ_Wesley']];
   const REFERENTS = [['','Aucun'],['33','Doryan KALAH'],['23','Eddy KALAH'],['24','Ghais Kalah'],['28','Jake CASIMIR'],['36','Louli VULLIOD-PIN'],['22','Nadia KALAH'],['2','Sheana KRIEF'],['29','Wesley DAUX'],['39','Youness OUACHBAB']];
+  const COMPANIES = [["67","+SIMPLE"],["41","2MA"],["80","ACPS"],["43","ACS AMI"],["35","ADD VALUE"],["37","AFI ESCA"],["50","AGIS"],["2","ALLIANZ"],["48","ALPTIS"],["90","AMY UNDERWRITING"],["49","APICIL"],["59","APIVIA"],["3","APRIL"],["51","AS SOLUTION"],["62","ASAF AFPS"],["54","ASSURMAX"],["38","AVANTAGE"],["5","AXA"],["83","AXA Juridica"],["104","AXECE"],["105","AXECE"],["31","Ami 3F"],["76","BROKOLI"],["100","CAMACTE"],["53","CARMINE"],["75","CBA"],["91","CEGEMA"],["45","CFDP"],["65","CIEL ASSURANCES"],["101","CO-COURTAGE ALDEA"],["97","Colonna Partners"],["34","Coverity"],["82","DAMAN Assurances"],["103","DIF ASSURANCE"],["44","DIGITAL INSURE"],["86","EDIFICA"],["56","ENTORIA"],["89","Eres Group"],["33","FMA"],["92","Fil Assistance"],["4","GENERALI"],["94","GENERALI - CO-COURTAGE YACINE ACHAHDI"],["78","HELVETIA"],["63","HENNER"],["85","Help Courtage"],["39","Heomi"],["40","IASSURE"],["88","ILONA"],["81","KASE"],["47","KOLBAT (ex RCDPRO)"],["36","LABALETTE"],["102","MATRISK"],["46","MAXANCE"],["52","METLIFE"],["84","MFA"],["95","MILA"],["72","MONDIAL CARE"],["70","MUTUELLE MIEUX ETRE"],["71","Malakoff"],["55","NEOLIANE"],["32","NOVELIA"],["29","Netvox"],["74","ODDO"],["93","ORUS"],["68","REGIS CO-COURTIER - ALLIANZ"],["61","REPAM"],["30","SANTIANE neoliane"],["64","SOLLY AZAR"],["99","SPRING"],["57","SPVIE"],["9","SWISS LIFE"],["107","Santé Vet'"],["98","Stoïk"],["66","TETRIS"],["79","UNICED"],["42","UNIM"],["73","VIE PLUS"],["69","YSA SOLUTIONS"],["77","ZENIOO"],["58","ZEPHIR"]];
   const STATUTS = [['current','En cours'],['pricing','En tarification'],['delivered','Remis'],['canceled','Sans suite'],['refused','Refus'],['pending_approval','En attente de validation'],['pending_parts','En attente de pièce']];
   const $ = (sel, parent=document) => parent.querySelector(sel);
   const escapeHTML = v => String(v).replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -44,6 +45,7 @@
 @media(max-width:850px){#devis-fetch-overlay #df-types{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 `;
   document.head.appendChild(style);
+  const picked=new Set();
   const modal = document.createElement('div');
   modal.id = 'devis-fetch-overlay';
   modal.style.cssText = 'display:none;position:fixed;inset:0;background:#0008;z-index:2147483000;align-items:center;justify-content:center;font-family:Arial,sans-serif';
@@ -54,7 +56,22 @@
   section.querySelector('p').textContent='Sélectionnez vos produits, puis définissez le référent, le binôme et la compagnie pour chaque devis.';
   const table=$('#df-table',modal), tableWrap=table.parentElement; tableWrap.classList.add('df-table-wrap');
   const add=$('#df-add',modal), all=$('#df-all',modal);
-  const addBar=document.createElement('div');addBar.className='df-actions';add.parentElement.replaceWith(addBar);addBar.append(add,all);
+  const addBar=document.createElement('div');addBar.className='df-actions';add.parentElement.replaceWith(addBar);addBar.append(all);
+  all.textContent='Tout sélectionner (filtre)';
+  const clear=document.createElement('button');clear.type='button';clear.textContent='Tout désélectionner';addBar.append(clear);
+  const global=document.createElement('div');global.className='df-actions';global.style.cssText='padding:10px 12px;background:#f2f7fa;border:1px solid #dae6ef;border-radius:8px';
+  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <label>État <select id="df-global-status"></select></label> <label>Référent <select id="df-global-referent"></select></label> <label>Binôme <select id="df-global-binome"></select></label> <label>Compagnie <select id="df-global-company"></select></label>';
+  tableWrap.before(global);
+  setOptions($('#df-global-status',modal),[['','Sans changement'],...STATUTS],'');
+  setOptions($('#df-global-referent',modal),REFERENTS,'');
+  setOptions($('#df-global-binome',modal),BINOMES,'');
+  setOptions($('#df-global-company',modal),[['','Sans changement'],...COMPANIES],'');
+  for(const [id,key] of [['df-global-status','status'],['df-global-referent','referent'],['df-global-binome','binome'],['df-global-company','company']]){
+    $('#'+id,modal).onchange=e=>{if(!e.target.value)return;rows.forEach(r=>r[key]=e.target.value);renderRows();};
+  }
+  clear.onclick=()=>{rows=[];picked.clear();renderTypes();renderRows();};
+  all.onclick=()=>{$('#df-types',modal).querySelectorAll('.df-type').forEach(el=>{picked.add(el.value);el.checked=true;});syncRows();};
+  
   $('#df-confirm',modal).closest('div').classList.add('df-confirm');
   const run=$('#df-run',modal), halt=$('#df-stop',modal), close=$('#df-close',modal);
   const actions=document.createElement('div');actions.className='df-actions';run.before(actions);actions.append(run,halt,close);
@@ -63,7 +80,16 @@
   const setOptions = (sel,list,val) => { sel.innerHTML=options(list,val); };
   function renderTypes() {
     const search = $('#df-search',modal).value.toLowerCase();
-    $('#df-types',modal).innerHTML = TYPES.filter(x=>x[0].toLowerCase().includes(search)).map(([label,id])=>'<label style="font-size:12px"><input type="checkbox" class="df-type" value="'+id+'"> '+escapeHTML(label)+'</label>').join('');
+    $('#df-types',modal).innerHTML = TYPES.filter(x=>x[0].toLowerCase().includes(search)).map(([label,id])=>'<label style="font-size:12px"><input type="checkbox" class="df-type" value="'+id+'" '+(picked.has(String(id))?'checked':'')+'> '+escapeHTML(label)+'</label>').join('');
+    $('#df-types',modal).querySelectorAll('.df-type').forEach(el=>el.onchange=()=>{
+      if(el.checked)picked.add(el.value);else picked.delete(el.value);
+      syncRows();
+    });
+  }
+  function syncRows(){
+    rows=rows.filter(r=>picked.has(r.id));
+    TYPES.forEach(([label,id])=>{if(picked.has(String(id))&&!rows.some(r=>r.id===String(id)))rows.push({id:String(id),label,status:'current',referent:'',binome:'',company:''});});
+    renderRows();
   }
   function renderRows() {
     $('#df-table',modal).innerHTML = '<thead><tr><th>Produit</th><th>Etat</th><th>Referent</th><th>Binome</th><th>Compagnie</th><th></th></tr></thead><tbody>'+rows.map((r,i)=>'<tr data-i="'+i+'"><td>'+escapeHTML(r.label)+'</td><td><select data-key="status">'+options(STATUTS,r.status)+'</select></td><td><select data-key="referent">'+options(REFERENTS,r.referent)+'</select></td><td><select data-key="binome">'+options(BINOMES,r.binome)+'</select></td><td><select data-key="company"><option value="">Chargement...</option></select></td><td><button data-remove="'+i+'" type="button">Retirer</button></td></tr>').join('')+'</tbody>';
@@ -71,12 +97,12 @@
       const index=Number(sel.closest('tr').dataset.i), key=sel.dataset.key;
       sel.onchange=()=>{rows[index][key]=sel.value;};
     });
-    $('#df-table',modal).querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{rows.splice(Number(b.dataset.remove),1);renderRows();});
+    $('#df-table',modal).querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{const removed=rows[Number(b.dataset.remove)];picked.delete(removed.id);rows.splice(Number(b.dataset.remove),1);renderTypes();renderRows();});
     rows.forEach((r,i)=>loadCompanies(r).then(list=>{
       if(rows[i]!==r)return;
       const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);
-      if(sel) {setOptions(sel,[['','Selectionner...'],...list],r.company); sel.onchange=()=>r.company=sel.value;}
-    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel)sel.innerHTML='<option value="">Compagnies indisponibles</option>';log('Compagnies '+r.label+' : '+err.message); }));
+      if(sel) {setOptions(sel,[['','Aucune compagnie'],...list],r.company); sel.onchange=()=>r.company=sel.value;}
+    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel){setOptions(sel,[['','Aucune compagnie'],...COMPANIES],r.company);sel.onchange=()=>r.company=sel.value;}log('Compagnies '+r.label+' : liste de secours utilisée'); }));
   }
   async function loadCompanies(row) {
     if(companyCache.has(row.id)) return companyCache.get(row.id);
@@ -95,12 +121,14 @@
       }).filter(item=>item[0]&&item[1]);
     } else {
       try {
-        const json=JSON.parse(body);
+        let json=JSON.parse(body);
+        if(typeof json==='string'){const temp=new DOMParser().parseFromString(json,'text/html');companies=Array.from(temp.querySelectorAll('input[name="companies[]"]')).map(el=>[el.value,temp.querySelector('label[for="'+el.id+'"]')?.textContent?.trim()||'']).filter(x=>x[0]&&x[1]);}
+        if(typeof json==='object' && typeof json.html==='string'){const temp=new DOMParser().parseFromString(json.html,'text/html');companies=Array.from(temp.querySelectorAll('input[name="companies[]"]')).map(el=>[el.value,temp.querySelector('label[for="'+el.id+'"]')?.textContent?.trim()||'']).filter(x=>x[0]&&x[1]);}
         const source=Array.isArray(json)?json:Array.isArray(json.companies)?json.companies:Array.isArray(json.data)?json.data:null;
         if(source)companies=source.map(x=>[String(x.id??x.company_id??x.value??''),String(x.name??x.company_name??x.label??'')]).filter(x=>x[0]&&x[1]);
       } catch {}
     }
-    if(!companies.length)throw Error('Aucune compagnie reconnue dans la réponse Modulr');
+    if(!companies.length)companies=COMPANIES;
     companyCache.set(row.id,companies);
     return companies;
   }
@@ -121,7 +149,7 @@
     set('estimate[referent_user_id]',row.referent);set('selectItemestimate[referent_user_id]',row.referent);
     set('estimate[custom_12]',row.binome);set('selectItemestimate[custom_12]',row.binome);
     set('estimate[input_date]',today());set('estimate[custom_14]',today());
-    data.delete('companies[]'); data.append('companies[]',row.company);
+    data.delete('companies[]'); if(row.company)data.append('companies[]',row.company);
     // La requete observee est urlencoded ; conserver tous les noms de champs repetes.
     const params=new URLSearchParams();
     for(const [k,v] of data.entries()) {if(typeof v!=='string')throw Error('Champ fichier non gere');params.append(k,v);}
@@ -138,16 +166,11 @@
     return resultId;
   }
   $('#df-search',modal).oninput=renderTypes;
-  $('#df-all',modal).onclick=()=>$('#df-types',modal).querySelectorAll('input').forEach(x=>x.checked=true);
-  $('#df-add',modal).onclick=()=>{for(const input of $('#df-types',modal).querySelectorAll('input:checked')) {
-    const [label,id]=TYPES.find(x=>String(x[1])===input.value);
-    if(!rows.some(x=>x.id===String(id)))rows.push({id:String(id),label,status:'current',referent:'',binome:'',company:''});
-  }renderRows();};
   $('#df-close',modal).onclick=()=>{if(!busy)modal.style.display='none';};
   $('#df-stop',modal).onclick=()=>{stop=true;log('Interruption demandee.');};
   $('#df-run',modal).onclick=async()=>{
     if(busy||!$('#df-confirm',modal).checked||!rows.length)return alert('Selectionner des devis et confirmer leur creation.');
-    if(rows.some(r=>!r.company))return alert('Choisir une compagnie pour chaque devis.');
+    // Modulr autorise l'absence de compagnie : ne pas bloquer l'ensemble du lot.
     if(!confirm('Creer '+rows.length+' nouveau(x) devis sur la fiche client '+clientId+' ?'))return;
     busy=true;stop=false;let success=0;const copy=rows.map(x=>({...x}));
     try {for(const row of copy){if(stop)break;log('Creation : '+row.label);
