@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Devis en masse Fetch (beta)
 // @namespace    https://github.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment
-// @version      2.0.0-beta.4
+// @version      2.0.0-beta.5
 // @description  Creation de devis sur la session Modulr de chaque collaborateur, sans cookies integres.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
@@ -46,6 +46,7 @@
 `;
   document.head.appendChild(style);
   const picked=new Set();
+  const setOptions = (sel,list,val) => { sel.innerHTML=options(list,val); };
   const modal = document.createElement('div');
   modal.id = 'devis-fetch-overlay';
   modal.style.cssText = 'display:none;position:fixed;inset:0;background:#0008;z-index:2147483000;align-items:center;justify-content:center;font-family:Arial,sans-serif';
@@ -77,7 +78,6 @@
   const actions=document.createElement('div');actions.className='df-actions';run.before(actions);actions.append(run,halt,close);
   const search=$('#df-search',modal);search.placeholder='Rechercher un type de devis...';search.style.width='100%';
   const log = s => { $('#df-log',modal).textContent += s+'\n'; };
-  const setOptions = (sel,list,val) => { sel.innerHTML=options(list,val); };
   function renderTypes() {
     const search = $('#df-search',modal).value.toLowerCase();
     $('#df-types',modal).innerHTML = TYPES.filter(x=>x[0].toLowerCase().includes(search)).map(([label,id])=>'<label style="font-size:12px"><input type="checkbox" class="df-type" value="'+id+'" '+(picked.has(String(id))?'checked':'')+'> '+escapeHTML(label)+'</label>').join('');
