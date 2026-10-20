@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Création de Devis en Masse
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.1
 // @description  Création de devis en masse par Fetch dans la session Modulr de chaque utilisateur
 // @author       LTOA Assurances
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
@@ -261,6 +261,35 @@
     }
   };
   renderTypes();
-  function install() {if($('#devis-fetch-trigger'))return;const button=document.createElement('button');button.id='devis-fetch-trigger';button.type='button';button.textContent='Devis en masse (Fetch beta)';button.style.cssText='padding:8px 12px;margin:8px;background:#215c7f;color:white;border:0;cursor:pointer;border-radius:4px';button.onclick=()=>{modal.style.display='flex';};const place=document.querySelector('.entity_info_block_1')||document.body;place.prepend(button);}
+  function install() {
+    if ($('#devis-fetch-trigger')) return;
+    const button=document.createElement('button');
+    button.id='devis-fetch-trigger';
+    button.type='button';
+    button.textContent='++';
+    button.title='Créer plusieurs devis';
+    button.setAttribute('aria-label','Créer plusieurs devis');
+    button.style.cssText='display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin:0 6px 0 0;padding:0;border:0;border-radius:4px;background:#2f6f95;color:#fff;font-weight:700;font-size:15px;line-height:1;cursor:pointer;vertical-align:middle';
+    button.addEventListener('mouseenter',()=>button.style.background='#255a79');
+    button.addEventListener('mouseleave',()=>button.style.background='#2f6f95');
+    button.onclick=()=>{modal.style.display='flex';};
+    const findTarget=()=>{
+      const block=document.querySelector('.entity_info_block_1');
+      if(!block)return null;
+      const addLink=Array.from(block.querySelectorAll('a[href*="estimates_manage.php"],a[href*="estimate_id=0"]'))
+        .find(a=>a.querySelector('.fa-plus')||/estimate_id=0/.test(a.getAttribute('href')||''));
+      return addLink||null;
+    };
+    const attach=()=>{
+      if(button.isConnected)return true;
+      const target=findTarget();
+      if(!target||!target.parentElement)return false;
+      target.parentElement.insertBefore(button,target);
+      return true;
+    };
+    if(attach())return;
+    let tries=0;
+    const timer=setInterval(()=>{if(attach()||++tries>=30)clearInterval(timer);},500);
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
