@@ -1,1174 +1,266 @@
 // ==UserScript==
-// @name         Modulr - Création de Devis en Masse (iFrames)
+// @name         Modulr - Création de Devis en Masse
 // @namespace    http://tampermonkey.net/
-// @version      1.7
-// @description  Permet de créer plusieurs devis simultanément via iframes cachées (vraiment en arrière-plan)
+// @version      2.0.0
+// @description  Création de devis en masse par Fetch dans la session Modulr de chaque utilisateur
 // @author       LTOA Assurances
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
-// @match        https://*.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment/main/modulr-creation-devis-en-masse-iframes.user.js
 // @updateURL    https://raw.githubusercontent.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment/main/modulr-creation-devis-en-masse-iframes.user.js
 // ==/UserScript==
+(() => {
+  'use strict';
+  const TYPES = [["2 roues",20],["Animaux",58],["Assurance scolaire",49],["Assurance Vie",53],["Assurance voyage",8],["Audit Assurance Global",40],["Automobile",2],["Dommage ouvrage",10],["Emprunteur",26],["Epargne Salariale",60],["Extension santé - Renfort ou Ayant Droit",52],["Flotte auto",6],["Flotte immeubles",7],["Habitation principale",1],["Habitation secondaire",11],["Marchandises transportées",13],["MRC",30],["MRH",3],["MRI",29],["MRP",41],["Perte d'exploitation",14],["PJ",15],["PNO",23],["Prévoyance collective C",28],["Prévoyance collective EP",48],["Prévoyance collective NC",47],["Prévoyance Décès",38],["Prévoyance Frais Généraux Permanents (FGP)",35],["Prévoyance Garantie Accident de la Vie",32],["Prévoyance Homme Clé",36],["Prévoyance Indemnité Journalière Hospitalisation (IJH)",34],["Prévoyance Individuelle TNS",27],["Prévoyance Mandataire Sociale",37],["Prévoyance Obsèques",33],["Rapatriement (GRC)",44],["RC Batiment",55],["RC constructeur",16],["RC décennale",17],["RC des dirigeants",18],["RC Marchandise",42],["RC PRO",25],["RC Terrain",62],["RC Vie privée",24],["RCMS",61],["Retraite",50],["Santé collective C",45],["Santé collective EP",46],["Santé collective NC",19],["Santé Individuelle Particulier",5],["Santé Individuelle TNS",39],["Surcomplémentaire Santé",43],["Surcomplémentaire Santé Non Résponsable",56],["TRC - Tous risques chantier",51],["Vie",9],["ZZZ_Biennale",57],["ZZZ_Libre2",21],["ZZZ_Libre3",54],["ZZZ_Libre4",4],["ZZZ_Libre5",12],["ZZZ_Libre6",22]];
+  const BINOMES = [['', 'Aucun'], ['138','Eddy'],['144','Ghais'],['141','Jake'],['217','Louli'],['139','Nadia'],['163','Youness'],['140','ZZZ_Faicel'],['142','ZZZ_Inssaf'],['143','ZZZ_Wesley']];
+  const REFERENTS = [['','Aucun'],['33','Doryan KALAH'],['23','Eddy KALAH'],['24','Ghais Kalah'],['28','Jake CASIMIR'],['36','Louli VULLIOD-PIN'],['22','Nadia KALAH'],['2','Sheana KRIEF'],['29','Wesley DAUX'],['39','Youness OUACHBAB']];
+  const COMPANIES = [["67","+SIMPLE"],["41","2MA"],["80","ACPS"],["43","ACS AMI"],["35","ADD VALUE"],["37","AFI ESCA"],["50","AGIS"],["2","ALLIANZ"],["48","ALPTIS"],["90","AMY UNDERWRITING"],["49","APICIL"],["59","APIVIA"],["3","APRIL"],["51","AS SOLUTION"],["62","ASAF AFPS"],["54","ASSURMAX"],["38","AVANTAGE"],["5","AXA"],["83","AXA Juridica"],["104","AXECE"],["105","AXECE"],["31","Ami 3F"],["76","BROKOLI"],["100","CAMACTE"],["53","CARMINE"],["75","CBA"],["91","CEGEMA"],["45","CFDP"],["65","CIEL ASSURANCES"],["101","CO-COURTAGE ALDEA"],["97","Colonna Partners"],["34","Coverity"],["82","DAMAN Assurances"],["103","DIF ASSURANCE"],["44","DIGITAL INSURE"],["86","EDIFICA"],["56","ENTORIA"],["89","Eres Group"],["33","FMA"],["92","Fil Assistance"],["4","GENERALI"],["94","GENERALI - CO-COURTAGE YACINE ACHAHDI"],["78","HELVETIA"],["63","HENNER"],["85","Help Courtage"],["39","Heomi"],["40","IASSURE"],["88","ILONA"],["81","KASE"],["47","KOLBAT (ex RCDPRO)"],["36","LABALETTE"],["102","MATRISK"],["46","MAXANCE"],["52","METLIFE"],["84","MFA"],["95","MILA"],["72","MONDIAL CARE"],["70","MUTUELLE MIEUX ETRE"],["71","Malakoff"],["55","NEOLIANE"],["32","NOVELIA"],["29","Netvox"],["74","ODDO"],["93","ORUS"],["68","REGIS CO-COURTIER - ALLIANZ"],["61","REPAM"],["30","SANTIANE neoliane"],["64","SOLLY AZAR"],["99","SPRING"],["57","SPVIE"],["9","SWISS LIFE"],["107","Santé Vet'"],["98","Stoïk"],["66","TETRIS"],["79","UNICED"],["42","UNIM"],["73","VIE PLUS"],["69","YSA SOLUTIONS"],["77","ZENIOO"],["58","ZEPHIR"]];
+  const STATUTS = [['current','En cours'],['pricing','En tarification'],['delivered','Remis'],['canceled','Sans suite'],['refused','Refus'],['pending_approval','En attente de validation'],['pending_parts','En attente de pièce']];
+  const $ = (sel, parent=document) => parent.querySelector(sel);
+  const escapeHTML = v => String(v).replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+  const clientId = new URL(location.href).searchParams.get('id');
+  if (!clientId || !/^\d+$/.test(clientId)) return;
+  let busy = false, stop = false, rows = [], companyCache = new Map();
+  const today = () => { const d = new Date(); return [String(d.getDate()).padStart(2,'0'),String(d.getMonth()+1).padStart(2,'0'),d.getFullYear()].join('/'); };
+  const options = (list, v='') => list.map(([id,label]) => '<option value="'+escapeHTML(id)+'"'+(String(id)===String(v)?' selected':'')+'>'+escapeHTML(label)+'</option>').join('');
+  const style=document.createElement('style');
+  style.textContent=`
+#devis-fetch-overlay{backdrop-filter:blur(2px)}
+#devis-fetch-overlay>section{box-sizing:border-box;display:flex;flex-direction:column;gap:12px!important;width:min(1250px,96vw)!important;height:min(90vh,950px)!important;padding:24px!important;border-radius:14px!important;box-shadow:0 22px 70px #0004;overflow:hidden!important}
+#devis-fetch-overlay h2{margin:0 0 5px;font-size:22px;font-weight:650;color:#173b55}
+#devis-fetch-overlay p{margin:0;color:#64748b}
+#devis-fetch-overlay input:not([type=checkbox]),#devis-fetch-overlay select{box-sizing:border-box;border:1px solid #d6dee7;background:#fff;border-radius:7px;padding:9px 11px;color:#26394b;min-width:0}
+#devis-fetch-overlay button{border:1px solid #c8d4df;border-radius:7px;background:#f7f9fc;color:#294b63;padding:9px 13px;font-weight:600;cursor:pointer}
+#devis-fetch-overlay button:hover{background:#eaf2f7}
+#devis-fetch-overlay #df-run{background:#216389;color:white;border-color:#216389}
+#devis-fetch-overlay #df-types{border:1px solid #e0e7ef;border-radius:10px;min-height:110px;max-height:175px!important;padding:12px;align-content:start;gap:9px!important;overscroll-behavior:contain}
+#devis-fetch-overlay #df-types label{display:flex;gap:8px;align-items:center;padding:7px 9px;background:#f6f9fc;border-radius:6px;font-size:12px!important;min-height:18px;cursor:pointer}
+#devis-fetch-overlay #df-types label:hover{background:#e9f2f8}
+#devis-fetch-overlay .df-table-wrap{min-height:130px;flex:1;overflow:auto;overscroll-behavior:contain;border:1px solid #dce5ee;border-radius:10px}
+#devis-fetch-overlay table{min-width:860px;border-collapse:separate!important;border-spacing:0}
+#devis-fetch-overlay th{position:sticky;top:0;z-index:1;text-align:left;background:#eaf1f6;padding:12px;color:#37516a;font-size:12px}
+#devis-fetch-overlay td{padding:10px 7px;border-top:1px solid #e9eef3;vertical-align:middle;font-size:12px}
+#devis-fetch-overlay td select{width:100%;max-width:100%}
+#devis-fetch-overlay tr:nth-child(even) td{background:#f9fbfc}
+#devis-fetch-overlay #df-log{flex:0 0 auto;max-height:105px!important;min-height:35px;overflow:auto;border-radius:8px;margin:0!important}
+#devis-fetch-overlay .df-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+#devis-fetch-overlay .df-confirm{padding:6px 0}
+#devis-fetch-overlay .df-progress{border:1px solid #dce7f0;border-radius:10px;padding:12px;background:#f8fbfd}
+#devis-fetch-overlay .df-progress-track{height:9px;border-radius:99px;background:#dfe9f1;overflow:hidden;margin:8px 0}
+#devis-fetch-overlay #df-progress-fill{height:100%;width:0%;background:#2784b6;transition:width .35s ease;border-radius:99px}
+#devis-fetch-overlay .df-progress-title{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:#2b526b}
+#devis-fetch-overlay .df-global-label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+#devis-fetch-overlay .df-global-label select:disabled{opacity:.45;background:#eef1f4}
+#devis-fetch-overlay .df-actions select{max-width:185px}
+#devis-fetch-overlay>section{height:min(94vh,1050px)!important;gap:9px!important;position:relative;padding:20px 24px!important}
+#devis-fetch-overlay #df-types{flex:0 0 165px;min-height:120px;max-height:165px!important;overflow-y:auto!important;scrollbar-gutter:stable;overscroll-behavior:contain}
+#devis-fetch-overlay .df-table-wrap{min-height:230px;flex:1 1 320px;overflow:auto!important;scrollbar-gutter:stable;overscroll-behavior:contain}
+#devis-fetch-overlay .df-table-wrap table{min-width:950px}
+#devis-fetch-overlay .df-global-settings{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px!important;align-items:end}
+#devis-fetch-overlay .df-global-settings>strong{grid-column:1/-1}
+#devis-fetch-overlay .df-global-label{min-width:0;display:grid;grid-template-columns:18px 1fr;grid-template-rows:auto auto;gap:5px 6px;align-items:center}
+#devis-fetch-overlay .df-global-label label{grid-column:1/-1;display:flex;gap:7px;align-items:center;cursor:pointer;font-weight:500} 
+#devis-fetch-overlay .df-global-label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:7px!important;min-width:0}
+#devis-fetch-overlay .df-global-label label{display:flex!important;align-items:center;gap:7px;min-height:22px}
+#devis-fetch-overlay .df-global-label select{display:block!important;position:relative!important;grid-column:auto!important;flex:0 0 auto!important;width:100%!important;max-width:100%!important;min-width:0!important;min-height:38px!important;height:38px!important;padding:7px 10px!important;font-size:13px!important;opacity:1!important;pointer-events:auto!important;cursor:pointer!important;appearance:auto!important;-webkit-appearance:menulist!important}
+#devis-fetch-overlay .df-table-wrap select{min-height:36px!important;height:36px!important;appearance:auto!important;-webkit-appearance:menulist!important;pointer-events:auto!important}
+#devis-fetch-overlay .df-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#devis-fetch-overlay #df-close{border:0;background:transparent;font-size:26px;line-height:1;padding:4px 9px;color:#597083}
+#devis-fetch-overlay #df-close:hover{background:#edf3f7}
+#devis-fetch-overlay .df-actions{flex-shrink:0}
+#devis-fetch-overlay .df-progress{flex-shrink:0}
+@media(max-width:850px){#devis-fetch-overlay .df-global-settings{grid-template-columns:repeat(2,minmax(0,1fr))}#devis-fetch-overlay>section{padding:14px!important}}
 
-(function() {
-    'use strict';
 
-    // ================================================================
-    // CONFIGURATION
-    // ================================================================
-
-    const PRODUCT_TYPES = [
-        { value: "20", label: "2 roues" },
-        { value: "58", label: "Animaux" },
-        { value: "49", label: "Assurance scolaire" },
-        { value: "53", label: "Assurance Vie" },
-        { value: "8", label: "Assurance voyage" },
-        { value: "40", label: "Audit Assurance Global" },
-        { value: "2", label: "Automobile" },
-        { value: "10", label: "Dommage ouvrage" },
-        { value: "26", label: "Emprunteur" },
-        { value: "60", label: "Epargne Salariale" },
-        { value: "52", label: "Extension santé - Renfort ou Ayant Droit" },
-        { value: "6", label: "Flotte auto" },
-        { value: "7", label: "Flotte immeubles" },
-        { value: "44", label: "GRC" },
-        { value: "1", label: "Habitation principale" },
-        { value: "11", label: "Habitation secondaire" },
-        { value: "13", label: "Marchandises transportées" },
-        { value: "30", label: "MRC" },
-        { value: "3", label: "MRH" },
-        { value: "29", label: "MRI" },
-        { value: "41", label: "MRP" },
-        { value: "14", label: "Perte d'exploitation" },
-        { value: "15", label: "PJ" },
-        { value: "23", label: "PNO" },
-        { value: "28", label: "Prévoyance collective C" },
-        { value: "48", label: "Prévoyance collective EP" },
-        { value: "47", label: "Prévoyance collective NC" },
-        { value: "38", label: "Prévoyance Décès" },
-        { value: "35", label: "Prévoyance Frais Généraux Permanents (FGP)" },
-        { value: "32", label: "Prévoyance Garantie Accident de la Vie" },
-        { value: "36", label: "Prévoyance Homme Clé" },
-        { value: "34", label: "Prévoyance Indemnité Journalière Hospitalisation (IJH)" },
-        { value: "27", label: "Prévoyance Individuelle TNS" },
-        { value: "37", label: "Prévoyance Mandataire Sociale" },
-        { value: "33", label: "Prévoyance Obsèques" },
-        { value: "55", label: "RC Batiment" },
-        { value: "16", label: "RC constructeur" },
-        { value: "17", label: "RC décennale" },
-        { value: "18", label: "RC des dirigeants" },
-        { value: "42", label: "RC Marchandise" },
-        { value: "25", label: "RC PRO" },
-        { value: "24", label: "RC Vie privée" },
-        { value: "61", label: "RCMS" },
-        { value: "50", label: "Retraite" },
-        { value: "45", label: "Santé collective C" },
-        { value: "46", label: "Santé collective EP" },
-        { value: "19", label: "Santé collective NC" },
-        { value: "5", label: "Santé Individuelle Particulier" },
-        { value: "39", label: "Santé Individuelle TNS" },
-        { value: "43", label: "Surcomplémentaire Santé" },
-        { value: "56", label: "Surcomplémentaire Santé Non Résponsable" },
-        { value: "51", label: "TRC - Tous risques chantier" },
-        { value: "9", label: "Vie" }
-    ];
-
-    const ESTIMATE_STATUS = [
-        { value: "current", label: "En cours" },
-        { value: "pricing", label: "En tarification" },
-        { value: "delivered", label: "Remis" },
-        { value: "canceled", label: "Sans suite" },
-        { value: "refused", label: "Refus" },
-        { value: "pending_approval", label: "En attente de validation" },
-        { value: "pending_parts", label: "En attente de pièce" }
-    ];
-
-    const REFERENTS = [
-        { value: "", label: "-- Aucun --" },
-        { value: "33", label: "Doryan KALAH" },
-        { value: "23", label: "Eddy KALAH" },
-        { value: "24", label: "Ghais Kalah" },
-        { value: "28", label: "Jake CASIMIR" },
-        { value: "36", label: "Louli VULLIOD-PIN" },
-        { value: "22", label: "Nadia KALAH" },
-        { value: "2", label: "Sheana KRIEF" },
-        { value: "29", label: "Wesley DAUX" },
-        { value: "39", label: "Youness OUACHBAB" }
-    ];
-
-    // Max concurrent iframes (don't overload server)
-    const MAX_CONCURRENT = 3;
-
-    let selectedProducts = [];
-    let clientId = null;
-    let isProcessing = false;
-
-    function getClientId() {
-        const urlParams = new URLSearchParams(window.location.search);
-        let id = urlParams.get('id');
-        if (!id) {
-            const clientInput = document.getElementById('client_id_');
-            if (clientInput) id = clientInput.value;
-        }
-        return id;
+@media(max-width:850px){#devis-fetch-overlay #df-types{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+`;
+  document.head.appendChild(style);
+  const picked=new Set();
+  const setOptions = (sel,list,val) => { sel.innerHTML=options(list,val); };
+  const modal = document.createElement('div');
+  modal.id = 'devis-fetch-overlay';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:#0008;z-index:2147483000;align-items:center;justify-content:center;font-family:Arial,sans-serif';
+  modal.innerHTML = '<section style="background:white;width:min(1250px,96vw);height:min(90vh,950px);overflow:auto;padding:18px;border-radius:8px;color:#243745"><h2>Creation de devis en masse - Fetch (beta)</h2><p>Chaque devis est cree dans votre session Modulr. Ne pas lancer simultanement deux creations pour le meme client.</p><input id="df-search" placeholder="Rechercher un produit" style="padding:8px;width:95%"><div id="df-types" style="max-height:145px;overflow:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0"></div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse" id="df-table"></table></div><p><button id="df-add" type="button">Ajouter les produits coches</button> <button id="df-all" type="button">Tout cocher (filtre)</button></p><div style="margin:12px 0"><label><input type="checkbox" id="df-confirm"> Je confirme la creation reelle des devis selectionnes</label></div><button id="df-run" type="button">Creer les devis</button> <button id="df-stop" type="button">Interrompre apres le devis en cours</button> <button id="df-close" type="button">Fermer</button><pre id="df-log" style="white-space:pre-wrap;max-height:180px;overflow:auto;background:#f3f5f7;padding:10px"></pre></section>';
+  document.body.appendChild(modal);
+  const section=modal.firstElementChild;
+  const heading=section.querySelector('h2'); heading.textContent='Création de devis en masse';
+  const header=document.createElement('div');header.className='df-header';heading.before(header);header.append(heading);
+  section.querySelector('p').textContent='Sélectionnez vos produits, puis définissez le référent, le binôme et la compagnie pour chaque devis.';
+  const table=$('#df-table',modal), tableWrap=table.parentElement; tableWrap.classList.add('df-table-wrap');
+  const add=$('#df-add',modal), all=$('#df-all',modal);
+  const addBar=document.createElement('div');addBar.className='df-actions';add.parentElement.replaceWith(addBar);addBar.append(all);
+  all.textContent='Tout sélectionner (filtre)';
+  const clear=document.createElement('button');clear.type='button';clear.textContent='Tout désélectionner';addBar.append(clear);
+  const global=document.createElement('div');global.className='df-actions';global.style.cssText='padding:10px 12px;background:#f2f7fa;border:1px solid #dae6ef;border-radius:8px';
+  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <div class="df-global-label"><label for="df-same-status"><input type="checkbox" id="df-same-status"> Même état</label><select id="df-global-status"></select></div> <div class="df-global-label"><label for="df-same-referent"><input type="checkbox" id="df-same-referent"> Même référent</label><select id="df-global-referent"></select></div> <div class="df-global-label"><label for="df-same-binome"><input type="checkbox" id="df-same-binome"> Même binôme</label><select id="df-global-binome"></select></div> <div class="df-global-label"><label for="df-same-company"><input type="checkbox" id="df-same-company"> Même compagnie</label><select id="df-global-company"></select></div>';
+  global.classList.add('df-global-settings');
+  tableWrap.before(global);
+  setOptions($('#df-global-status',modal),[['','Sans changement'],...STATUTS],'');
+  setOptions($('#df-global-referent',modal),REFERENTS,'');
+  setOptions($('#df-global-binome',modal),BINOMES,'');
+  setOptions($('#df-global-company',modal),[['','Sans changement'],...COMPANIES],'');
+  const globalSettings=[['status','df-global-status','df-same-status'],['referent','df-global-referent','df-same-referent'],['binome','df-global-binome','df-same-binome'],['company','df-global-company','df-same-company']];
+  function applyGlobals() {
+    for(const [key,id,check] of globalSettings) {
+      if($('#'+check,modal).checked) rows.forEach(row=>{row[key]=$('#'+id,modal).value;});
     }
-
-    function getTodayDate() {
-        const today = new Date();
-        const day = String(today.getDate()).padStart(2, '0');
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const year = today.getFullYear();
-        return `${day}/${month}/${year}`;
-    }
-
-    function injectStyles() {
-        if (document.getElementById('bulk-estimate-styles')) return;
-
-        const styles = `
-            <style id="bulk-estimate-styles">
-                .bulk-estimate-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0, 0, 0, 0.5);
-                    z-index: 10000;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                }
-
-.bulk-estimate-modal {
-    background: #fff;
-    border-radius: 4px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    max-width: 1280px;
-    width: 96vw;
-    height: 92vh;
-    max-height: 92vh;
-    display: flex;
-    flex-direction: column;
-}
-
-                .bulk-estimate-header {
-                    background: var(--color-header-background, #215c7f);
-                    color: #fff;
-                    padding: 15px 20px;
-                    border-radius: 4px 4px 0 0;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-
-                .bulk-estimate-header h2 {
-                    margin: 0;
-                    font-size: 16px;
-                    font-weight: normal;
-                }
-
-                .bulk-estimate-close {
-                    background: none;
-                    border: none;
-                    color: #fff;
-                    font-size: 24px;
-                    cursor: pointer;
-                    padding: 0;
-                    line-height: 1;
-                }
-
-.bulk-estimate-body {
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-}
-
-                .bulk-estimate-section {
-                    margin-bottom: 20px;
-                }
-
-                .bulk-estimate-section-title {
-                    font-weight: bold;
-                    margin-bottom: 10px;
-                    color: var(--color-main, #688396);
-                    border-bottom: 1px solid #ddd;
-                    padding-bottom: 5px;
-                }
-
-                .bulk-estimate-products-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                    gap: 8px;
-                    max-height: 200px;
-                    overflow-y: auto;
-                    border: 1px solid #ddd;
-                    padding: 10px;
-                    border-radius: 4px;
-                    background: #f9f9f9;
-                }
-
-                .bulk-estimate-product-item {
-                    display: flex;
-                    align-items: center;
-                    padding: 5px;
-                    background: #fff;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                }
-
-                .bulk-estimate-product-item:hover {
-                    background: var(--color-hover-list-rows, #e0d3b1);
-                }
-
-                .bulk-estimate-product-item input[type="checkbox"] {
-                    margin-right: 8px;
-                    cursor: pointer;
-                }
-
-                .bulk-estimate-product-item label {
-                    cursor: pointer;
-                    font-size: 12px;
-                    flex: 1;
-                }
-
-.bulk-estimate-table-container {
-    display: flex;
-    gap: 20px;
-    align-items: stretch;
-    min-height: 420px;
-    max-height: calc(92vh - 330px);
-}
-
-.bulk-estimate-table-wrapper {
-    flex: 1;
-    overflow-x: auto;
-    overflow-y: auto;
-    min-height: 300px;
-    max-height: 100%;
-}
-
-                .bulk-estimate-selected-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-.bulk-estimate-selected-table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-}
-
-.bulk-estimate-selected-table tbody td {
-    vertical-align: top;
-}
-                .bulk-estimate-selected-table th,
-                .bulk-estimate-selected-table td {
-                    padding: 8px 10px;
-                    border: 1px solid #ddd;
-                    text-align: left;
-                }
-
-                .bulk-estimate-selected-table th {
-                    background: var(--color-main, #688396);
-                    color: #fff;
-                    font-weight: normal;
-                    font-size: 12px;
-                }
-
-                .bulk-estimate-selected-table tr:nth-child(even) {
-                    background: #f5f5f5;
-                }
-
-                .bulk-estimate-selected-table tr:hover {
-                    background: var(--color-hover-list-rows, #e0d3b1);
-                }
-
-                .bulk-estimate-selected-table select {
-                    width: 100%;
-                    padding: 5px;
-                    border: 1px solid #ccc;
-                    border-radius: 3px;
-                    cursor: pointer;
-                }
-
-                .bulk-estimate-selected-table select:disabled {
-                    background: #e9ecef;
-                    cursor: not-allowed;
-                }
-
-                .bulk-estimate-selected-table .remove-btn {
-                    background: #dc3545;
-                    color: #fff;
-                    border: none;
-                    padding: 5px 10px;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    font-size: 12px;
-                }
-
-                .bulk-estimate-selected-table .remove-btn:hover {
-                    background: #c82333;
-                }
-
-                .bulk-estimate-global-options {
-                    background: linear-gradient(135deg, #f0f4f7 0%, #e8eef2 100%);
-                    padding: 15px;
-                    border-radius: 4px;
-                    border: 1px solid #ccc;
-                    min-width: 220px;
-                    flex-shrink: 0;
-                }
-
-                .bulk-estimate-global-options-title {
-                    font-weight: bold;
-                    margin-bottom: 12px;
-                    color: var(--color-main, #688396);
-                    font-size: 13px;
-                    border-bottom: 1px solid #ccc;
-                    padding-bottom: 8px;
-                }
-
-                .bulk-estimate-global-option {
-                    margin-bottom: 15px;
-                }
-
-                .bulk-estimate-global-option:last-child {
-                    margin-bottom: 0;
-                }
-
-                .bulk-estimate-global-option-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    margin-bottom: 8px;
-                }
-
-                .bulk-estimate-global-option-header input[type="checkbox"] {
-                    margin: 0;
-                    width: 16px;
-                    height: 16px;
-                    cursor: pointer;
-                }
-
-                .bulk-estimate-global-option-header label {
-                    font-size: 12px;
-                    font-weight: 500;
-                    cursor: pointer;
-                }
-
-                .bulk-estimate-global-option select {
-                    width: 100%;
-                    padding: 8px 10px;
-                    border: 1px solid #ccc;
-                    border-radius: 3px;
-                    font-size: 12px;
-                    background: #e9ecef;
-                    cursor: not-allowed;
-                    pointer-events: none;
-                    opacity: 0.6;
-                }
-
-                .bulk-estimate-global-option select.enabled {
-                    background: #fff !important;
-                    cursor: pointer !important;
-                    border-color: var(--color-main, #688396) !important;
-                    pointer-events: auto !important;
-                    opacity: 1 !important;
-                }
-
-                .bulk-estimate-footer {
-                    padding: 15px 20px;
-                    border-top: 1px solid #ddd;
-                    display: flex;
-                    justify-content: flex-end;
-                    gap: 10px;
-                    background: #f5f5f5;
-                    border-radius: 0 0 4px 4px;
-                }
-
-                .bulk-estimate-btn {
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    font-size: 14px;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-
-                .bulk-estimate-btn-primary {
-                    background: var(--color-main, #688396);
-                    color: #fff;
-                }
-
-                .bulk-estimate-btn-primary:hover {
-                    background: var(--color-main-darker, #5e7687);
-                }
-
-                .bulk-estimate-btn-secondary {
-                    background: #6c757d;
-                    color: #fff;
-                }
-
-                .bulk-estimate-btn-secondary:hover {
-                    background: #5a6268;
-                }
-
-                .bulk-estimate-btn:disabled {
-                    opacity: 0.6;
-                    cursor: not-allowed;
-                }
-
-                .bulk-estimate-empty-message {
-                    text-align: center;
-                    color: #999;
-                    font-style: italic;
-                    padding: 20px;
-                    background: #f9f9f9;
-                    border: 1px dashed #ddd;
-                    border-radius: 4px;
-                }
-
-                .bulk-estimate-search {
-                    width: 100%;
-                    padding: 8px 10px;
-                    border: 1px solid #ccc;
-                    border-radius: 3px;
-                    margin-bottom: 10px;
-                }
-
-                .bulk-estimate-quick-actions {
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 10px;
-                }
-
-                .bulk-estimate-quick-btn {
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    background: #e9ecef;
-                    border: 1px solid #ccc;
-                    border-radius: 3px;
-                    cursor: pointer;
-                }
-
-                .bulk-estimate-quick-btn:hover {
-                    background: #ddd;
-                }
-
-                .bulk-estimate-trigger {
-                    cursor: pointer;
-                }
-
-                .bulk-estimate-trigger .fa-stack-2x {
-                    color: var(--color-main, #688396);
-                }
-
-                .bulk-estimate-trigger:hover .fa-stack-2x {
-                    color: var(--color-hover-main, #d6c491);
-                }
-
-                /* Progress section */
-                .bulk-estimate-progress {
-                    background: #f8f9fa;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                    padding: 20px;
-                    margin-top: 15px;
-                }
-
-                .bulk-estimate-progress-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 10px;
-                }
-
-                .bulk-estimate-progress-title {
-                    font-weight: bold;
-                    color: var(--color-main, #688396);
-                }
-
-                .bulk-estimate-progress-count {
-                    font-size: 14px;
-                    color: #666;
-                }
-
-                .bulk-estimate-progress-bar {
-                    height: 24px;
-                    background: #e9ecef;
-                    border-radius: 12px;
-                    overflow: hidden;
-                    margin-bottom: 10px;
-                }
-
-                .bulk-estimate-progress-fill {
-                    height: 100%;
-                    background: linear-gradient(90deg, var(--color-main, #688396), var(--color-hover-main, #d6c491));
-                    transition: width 0.3s ease;
-                    border-radius: 12px;
-                }
-
-                .bulk-estimate-progress-current {
-                    font-size: 13px;
-                    color: #666;
-                    text-align: center;
-                }
-
-                .bulk-estimate-progress-log {
-                    margin-top: 15px;
-                    max-height: 200px;
-                    overflow-y: auto;
-                    font-size: 12px;
-                    background: #fff;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                    padding: 10px;
-                }
-
-                .bulk-estimate-log-item {
-                    padding: 4px 0;
-                    border-bottom: 1px solid #eee;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-
-                .bulk-estimate-log-item:last-child {
-                    border-bottom: none;
-                }
-
-                .bulk-estimate-log-item.success {
-                    color: #28a745;
-                }
-
-                .bulk-estimate-log-item.error {
-                    color: #dc3545;
-                }
-
-                .bulk-estimate-log-item.pending {
-                    color: #6c757d;
-                }
-
-                .bulk-estimate-result {
-                    margin-top: 15px;
-                    padding: 15px;
-                    border-radius: 4px;
-                    text-align: center;
-                    font-weight: bold;
-                }
-
-                .bulk-estimate-result.success {
-                    background: #d4edda;
-                    color: #155724;
-                    border: 1px solid #c3e6cb;
-                }
-
-                .bulk-estimate-result.partial {
-                    background: #fff3cd;
-                    color: #856404;
-                    border: 1px solid #ffeeba;
-                }
-
-                .bulk-estimate-result.error {
-                    background: #f8d7da;
-                    color: #721c24;
-                    border: 1px solid #f5c6cb;
-                }
-
-                /* Hidden iframe container */
-                .bulk-estimate-iframe-container {
-                    position: fixed;
-                    left: -9999px;
-                    top: -9999px;
-                    width: 1px;
-                    height: 1px;
-                    visibility: hidden;
-                }
-            </style>
-        `;
-        document.head.insertAdjacentHTML('beforeend', styles);
-    }
-
-    function createTriggerButton() {
-        const checkInterval = setInterval(() => {
-            const estimatesTab = document.querySelector('.entity_info_block_1');
-            if (estimatesTab) {
-                const existingAddBtn = estimatesTab.querySelector('a[href*="estimates_manage.php"]');
-                if (existingAddBtn && !document.querySelector('.bulk-estimate-trigger')) {
-                    const triggerBtn = document.createElement('span');
-                    triggerBtn.className = 'fa-stack fa-lg square_icon bulk-estimate-trigger';
-                    triggerBtn.title = 'Créer plusieurs devis en masse';
-                    triggerBtn.innerHTML = `
-                        <span class="fa fa-square fa-stack-2x"></span>
-                        <span class="fa fa-layer-group fa-stack-1x fa-inverse"></span>
-                    `;
-                    triggerBtn.addEventListener('click', openModal);
-                    existingAddBtn.parentNode.insertBefore(triggerBtn, existingAddBtn);
-                    clearInterval(checkInterval);
-                }
-            }
-        }, 500);
-    }
-
-    function createModal() {
-        if (document.getElementById('bulk-estimate-modal')) return;
-
-        const modal = document.createElement('div');
-        modal.id = 'bulk-estimate-modal';
-        modal.className = 'bulk-estimate-overlay';
-        modal.style.display = 'none';
-
-        modal.innerHTML = `
-            <div class="bulk-estimate-modal">
-                <div class="bulk-estimate-header">
-                    <h2><span class="fa fa-layer-group"></span> Création de Devis en Masse</h2>
-                    <button class="bulk-estimate-close" id="bulk-estimate-close">&times;</button>
-                </div>
-                <div class="bulk-estimate-body">
-                    <div id="bulk-estimate-form-section">
-                        <div class="bulk-estimate-section">
-                            <div class="bulk-estimate-section-title">
-                                <span class="fa fa-th-list"></span> Sélectionner les types de produits
-                            </div>
-                            <input type="text" class="bulk-estimate-search" id="bulk-estimate-search" placeholder="Rechercher un type de produit...">
-                            <div class="bulk-estimate-quick-actions">
-                                <button type="button" class="bulk-estimate-quick-btn" id="bulk-select-all">Tout sélectionner</button>
-                                <button type="button" class="bulk-estimate-quick-btn" id="bulk-deselect-all">Tout désélectionner</button>
-                            </div>
-                            <div class="bulk-estimate-products-grid" id="bulk-estimate-products">
-                                ${PRODUCT_TYPES.map(p => `
-                                    <div class="bulk-estimate-product-item">
-                                        <input type="checkbox" id="product-${p.value}" data-value="${p.value}" data-label="${p.label}">
-                                        <label for="product-${p.value}">${p.label}</label>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-
-                        <div class="bulk-estimate-section">
-                            <div class="bulk-estimate-section-title">
-                                <span class="fa fa-file-alt"></span> Devis à créer (<span id="bulk-estimate-count">0</span>)
-                            </div>
-                            <div class="bulk-estimate-table-container">
-                                <div class="bulk-estimate-table-wrapper" id="bulk-estimate-selected-container">
-                                    <p class="bulk-estimate-empty-message">Sélectionnez des types de produits ci-dessus</p>
-                                </div>
-                                <div class="bulk-estimate-global-options" id="bulk-estimate-global-options" style="display: none;">
-                                    <div class="bulk-estimate-global-options-title">
-                                        <span class="fa fa-cog"></span> Appliquer à tous
-                                    </div>
-                                    <div class="bulk-estimate-global-option">
-                                        <div class="bulk-estimate-global-option-header">
-                                            <input type="checkbox" id="global-status-enabled">
-                                            <label for="global-status-enabled">Même état</label>
-                                        </div>
-                                        <select id="global-status">
-                                            ${ESTIMATE_STATUS.map(s => `<option value="${s.value}">${s.label}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                    <div class="bulk-estimate-global-option">
-                                        <div class="bulk-estimate-global-option-header">
-                                            <input type="checkbox" id="global-referent-enabled">
-                                            <label for="global-referent-enabled">Même référent</label>
-                                        </div>
-                                        <select id="global-referent">
-                                            ${REFERENTS.map(r => `<option value="${r.value}">${r.label}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="bulk-estimate-progress-section" style="display: none;">
-                        <div class="bulk-estimate-progress">
-                            <div class="bulk-estimate-progress-header">
-                                <span class="bulk-estimate-progress-title" id="bulk-progress-title">
-                                    <span class="fa fa-spinner fa-spin"></span> Création en cours...
-                                </span>
-                                <span class="bulk-estimate-progress-count" id="bulk-progress-count">0/0</span>
-                            </div>
-                            <div class="bulk-estimate-progress-bar">
-                                <div class="bulk-estimate-progress-fill" id="bulk-progress-fill" style="width: 0%"></div>
-                            </div>
-                            <div class="bulk-estimate-progress-current" id="bulk-progress-current">
-                                Initialisation...
-                            </div>
-                            <div class="bulk-estimate-progress-log" id="bulk-progress-log"></div>
-                        </div>
-                        <div id="bulk-estimate-result" style="display: none;"></div>
-                    </div>
-                </div>
-                <div class="bulk-estimate-footer">
-                    <button type="button" class="bulk-estimate-btn bulk-estimate-btn-secondary" id="bulk-estimate-cancel">
-                        <span class="fa fa-times"></span> Annuler
-                    </button>
-                    <button type="button" class="bulk-estimate-btn bulk-estimate-btn-primary" id="bulk-estimate-submit" disabled>
-                        <span class="fa fa-check"></span> Créer les devis
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Create hidden iframe container
-        const iframeContainer = document.createElement('div');
-        iframeContainer.id = 'bulk-estimate-iframe-container';
-        iframeContainer.className = 'bulk-estimate-iframe-container';
-        document.body.appendChild(iframeContainer);
-
-        document.body.appendChild(modal);
-        setTimeout(() => attachModalEvents(), 100);
-    }
-
-    function attachModalEvents() {
-        document.getElementById('bulk-estimate-close').onclick = () => {
-            if (!isProcessing) closeModal();
-        };
-
-        document.getElementById('bulk-estimate-cancel').onclick = () => {
-            if (!isProcessing) {
-                closeModal();
-            } else {
-                if (confirm('Voulez-vous interrompre la création des devis ?')) {
-                    isProcessing = false;
-                }
-            }
-        };
-
-        document.getElementById('bulk-estimate-modal').onclick = (e) => {
-            if (e.target.id === 'bulk-estimate-modal' && !isProcessing) closeModal();
-        };
-
-        document.getElementById('bulk-estimate-search').oninput = filterProducts;
-
-        document.getElementById('bulk-select-all').onclick = () => {
-            document.querySelectorAll('#bulk-estimate-products .bulk-estimate-product-item').forEach(item => {
-                if (item.style.display !== 'none') {
-                    const cb = item.querySelector('input[type="checkbox"]');
-                    if (cb) cb.checked = true;
-                }
-            });
-            updateSelectedProducts();
-        };
-
-        document.getElementById('bulk-deselect-all').onclick = () => {
-            document.querySelectorAll('#bulk-estimate-products input[type="checkbox"]').forEach(cb => {
-                cb.checked = false;
-            });
-            updateSelectedProducts();
-        };
-
-        document.querySelectorAll('#bulk-estimate-products input[type="checkbox"]').forEach(cb => {
-            cb.onchange = updateSelectedProducts;
-        });
-
-        // Global status
-        const globalStatusCheckbox = document.getElementById('global-status-enabled');
-        const globalStatusSelect = document.getElementById('global-status');
-        globalStatusCheckbox.onchange = function() {
-            if (this.checked) {
-                globalStatusSelect.classList.add('enabled');
-                applyGlobalStatus();
-            } else {
-                globalStatusSelect.classList.remove('enabled');
-            }
-            renderSelectedTable();
-        };
-        globalStatusSelect.onchange = function() {
-            if (globalStatusCheckbox.checked) applyGlobalStatus();
-        };
-
-        // Global referent
-        const globalReferentCheckbox = document.getElementById('global-referent-enabled');
-        const globalReferentSelect = document.getElementById('global-referent');
-        globalReferentCheckbox.onchange = function() {
-            if (this.checked) {
-                globalReferentSelect.classList.add('enabled');
-                applyGlobalReferent();
-            } else {
-                globalReferentSelect.classList.remove('enabled');
-            }
-            renderSelectedTable();
-        };
-        globalReferentSelect.onchange = function() {
-            if (globalReferentCheckbox.checked) applyGlobalReferent();
-        };
-
-        document.getElementById('bulk-estimate-submit').onclick = startBulkCreation;
-    }
-
-    function filterProducts() {
-        const search = document.getElementById('bulk-estimate-search').value.toLowerCase();
-        document.querySelectorAll('.bulk-estimate-product-item').forEach(item => {
-            const label = item.querySelector('label').textContent.toLowerCase();
-            item.style.display = label.includes(search) ? '' : 'none';
-        });
-    }
-
-    function updateSelectedProducts() {
-        selectedProducts = [];
-        document.querySelectorAll('#bulk-estimate-products input[type="checkbox"]:checked').forEach(cb => {
-            selectedProducts.push({
-                value: cb.dataset.value,
-                label: cb.dataset.label,
-                status: 'current',
-                referent: ''
-            });
-        });
-
-        document.getElementById('bulk-estimate-global-options').style.display = selectedProducts.length > 0 ? 'block' : 'none';
-        renderSelectedTable();
-        document.getElementById('bulk-estimate-count').textContent = selectedProducts.length;
-        document.getElementById('bulk-estimate-submit').disabled = selectedProducts.length === 0;
-
-        if (document.getElementById('global-status-enabled').checked) applyGlobalStatus();
-        if (document.getElementById('global-referent-enabled').checked) applyGlobalReferent();
-    }
-
-    function renderSelectedTable() {
-        const container = document.getElementById('bulk-estimate-selected-container');
-        if (selectedProducts.length === 0) {
-            container.innerHTML = '<p class="bulk-estimate-empty-message">Sélectionnez des types de produits ci-dessus</p>';
-            return;
-        }
-
-        const globalStatusEnabled = document.getElementById('global-status-enabled').checked;
-        const globalReferentEnabled = document.getElementById('global-referent-enabled').checked;
-
-        container.innerHTML = `
-            <table class="bulk-estimate-selected-table">
-                <thead>
-                    <tr>
-                        <th style="width: 40%">Type de produit</th>
-                        <th style="width: 25%">État du devis</th>
-                        <th style="width: 25%">Référent</th>
-                        <th style="width: 10%"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${selectedProducts.map((p, idx) => `
-                        <tr data-index="${idx}">
-                            <td>${p.label}</td>
-                            <td>
-                                <select class="status-select" data-index="${idx}" ${globalStatusEnabled ? 'disabled' : ''}>
-                                    ${ESTIMATE_STATUS.map(s => `<option value="${s.value}" ${p.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}
-                                </select>
-                            </td>
-                            <td>
-                                <select class="referent-select" data-index="${idx}" ${globalReferentEnabled ? 'disabled' : ''}>
-                                    ${REFERENTS.map(r => `<option value="${r.value}" ${p.referent === r.value ? 'selected' : ''}>${r.label}</option>`).join('')}
-                                </select>
-                            </td>
-                            <td>
-                                <button type="button" class="remove-btn" data-value="${p.value}" title="Retirer">
-                                    <span class="fa fa-trash"></span>
-                                </button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-
-        container.querySelectorAll('.status-select').forEach(select => {
-            select.onchange = (e) => {
-                selectedProducts[parseInt(e.target.dataset.index)].status = e.target.value;
-            };
-        });
-
-        container.querySelectorAll('.referent-select').forEach(select => {
-            select.onchange = (e) => {
-                selectedProducts[parseInt(e.target.dataset.index)].referent = e.target.value;
-            };
-        });
-
-        container.querySelectorAll('.remove-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                const value = e.currentTarget.dataset.value;
-                const checkbox = document.querySelector(`#product-${value}`);
-                if (checkbox) checkbox.checked = false;
-                updateSelectedProducts();
-            };
-        });
-    }
-
-    function applyGlobalStatus() {
-        const status = document.getElementById('global-status').value;
-        selectedProducts.forEach(p => p.status = status);
-        document.querySelectorAll('.status-select').forEach(select => select.value = status);
-    }
-
-    function applyGlobalReferent() {
-        const referent = document.getElementById('global-referent').value;
-        selectedProducts.forEach(p => p.referent = referent);
-        document.querySelectorAll('.referent-select').forEach(select => select.value = referent);
-    }
-
-    function openModal() {
-        clientId = getClientId();
-        if (!clientId) {
-            alert('Impossible de récupérer l\'ID client');
-            return;
-        }
-
-        document.getElementById('bulk-estimate-modal').style.display = 'flex';
-        document.getElementById('bulk-estimate-form-section').style.display = 'block';
-        document.getElementById('bulk-estimate-progress-section').style.display = 'none';
-        document.getElementById('bulk-estimate-submit').style.display = '';
-        document.getElementById('bulk-estimate-result').style.display = 'none';
-        document.getElementById('bulk-progress-log').innerHTML = '';
-    }
-
-    function closeModal() {
-        if (isProcessing) return;
-
-        document.getElementById('bulk-estimate-modal').style.display = 'none';
-        document.querySelectorAll('#bulk-estimate-products input[type="checkbox"]').forEach(cb => cb.checked = false);
-        selectedProducts = [];
-        updateSelectedProducts();
-        document.getElementById('bulk-estimate-search').value = '';
-        filterProducts();
-        document.getElementById('global-status-enabled').checked = false;
-        document.getElementById('global-referent-enabled').checked = false;
-        document.getElementById('global-status').classList.remove('enabled');
-        document.getElementById('global-referent').classList.remove('enabled');
-
-        // Clean iframes
-        document.getElementById('bulk-estimate-iframe-container').innerHTML = '';
-    }
-
-    function addLogEntry(text, status, id) {
-        const log = document.getElementById('bulk-progress-log');
-        const existing = log.querySelector(`[data-id="${id}"]`);
-
-        let icon = status === 'success' ? 'fa-check-circle' : status === 'error' ? 'fa-times-circle' : 'fa-spinner fa-spin';
-
-        if (existing) {
-            existing.className = `bulk-estimate-log-item ${status}`;
-            existing.innerHTML = `<span class="fa ${icon}"></span> ${text}`;
-        } else {
-            const item = document.createElement('div');
-            item.className = `bulk-estimate-log-item ${status}`;
-            item.dataset.id = id;
-            item.innerHTML = `<span class="fa ${icon}"></span> ${text}`;
-            log.appendChild(item);
-        }
-        log.scrollTop = log.scrollHeight;
-    }
-
-    function updateProgressBar(completed, total, current) {
-        document.getElementById('bulk-progress-count').textContent = `${completed}/${total}`;
-        const percent = Math.round((completed / total) * 100);
-        document.getElementById('bulk-progress-fill').style.width = `${percent}%`;
-        if (current) {
-            document.getElementById('bulk-progress-current').textContent = current;
-        }
-    }
-
-    // Create estimate via iframe
-    function createEstimateViaIframe(product, index) {
-        return new Promise((resolve, reject) => {
-            const iframeId = `bulk-iframe-${index}`;
-            const logId = `estimate-${index}`;
-
-            addLogEntry(`${product.label}...`, 'pending', logId);
-
-            const iframe = document.createElement('iframe');
-            iframe.id = iframeId;
-            iframe.style.cssText = 'width:1px;height:1px;position:absolute;left:-9999px;visibility:hidden;';
-            iframe.src = `https://courtage.modulr.fr/fr/scripts/estimates/estimates_manage.php?client_id=${clientId}&estimate_id=0`;
-
-            let loadCount = 0;
-            let formFilled = false;
-
-            iframe.onload = async function() {
-                loadCount++;
-
-                try {
-                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-
-                    // First load: fill and submit form
-                    if (loadCount === 1 && !formFilled) {
-                        formFilled = true;
-
-                        // Wait for page to fully render
-                        await new Promise(r => setTimeout(r, 1000));
-
-                        // Select product type
-                        const productRadio = iframeDoc.querySelector(`input[name="selectItemestimate[product_type_id]"][value="${product.value}"]`);
-                        if (productRadio) productRadio.click();
-
-                        await new Promise(r => setTimeout(r, 200));
-
-                        // Select status
-                        const statusRadio = iframeDoc.querySelector(`input[name="selectItemestimate[status]"][value="${product.status}"]`);
-                        if (statusRadio) statusRadio.click();
-
-                        await new Promise(r => setTimeout(r, 200));
-
-                        // Select referent
-                        if (product.referent) {
-                            const referentRadio = iframeDoc.querySelector(`input[name="selectItemestimate[referent_user_id]"][value="${product.referent}"]`);
-                            if (referentRadio) referentRadio.click();
-                        }
-
-                        await new Promise(r => setTimeout(r, 200));
-
-                        // Fill date
-                        const todayStr = getTodayDate();
-                        const dateInput = iframeDoc.querySelector('input[name="estimate[custom_14]"]');
-                        if (dateInput) {
-                            dateInput.value = todayStr;
-                            dateInput.dispatchEvent(new Event('input', { bubbles: true }));
-                            dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-
-                        await new Promise(r => setTimeout(r, 300));
-
-                        // Submit form
-                        const submitBtn = iframeDoc.querySelector('button.button_link.button_link_icon.disable_button_after_submit[type="submit"]');
-                        if (submitBtn) {
-                            submitBtn.click();
-                        } else {
-                            // Try form submit directly
-                            const form = iframeDoc.querySelector('form');
-                            if (form) form.submit();
-                        }
-                    }
-                    // Second load: form was submitted, check result
-                    else if (loadCount >= 2) {
-                        // If we get here, form was submitted
-                        addLogEntry(`${product.label} - Créé avec succès`, 'success', logId);
-
-                        // Remove iframe
-                        setTimeout(() => {
-                            iframe.remove();
-                        }, 500);
-
-                        resolve({ success: true, product });
-                    }
-                } catch (error) {
-                    console.error('Iframe error:', error);
-                    addLogEntry(`${product.label} - Erreur: ${error.message}`, 'error', logId);
-                    iframe.remove();
-                    resolve({ success: false, product, error: error.message });
-                }
-            };
-
-            iframe.onerror = function(error) {
-                addLogEntry(`${product.label} - Erreur de chargement`, 'error', logId);
-                iframe.remove();
-                resolve({ success: false, product, error: 'Erreur de chargement' });
-            };
-
-            // Timeout after 30 seconds
-            setTimeout(() => {
-                if (loadCount < 2) {
-                    addLogEntry(`${product.label} - Timeout`, 'error', logId);
-                    iframe.remove();
-                    resolve({ success: false, product, error: 'Timeout' });
-                }
-            }, 30000);
-
-            document.getElementById('bulk-estimate-iframe-container').appendChild(iframe);
-        });
-    }
-
-    async function startBulkCreation() {
-        if (selectedProducts.length === 0 || isProcessing) return;
-
-        isProcessing = true;
-
-        // Show progress
-        document.getElementById('bulk-estimate-form-section').style.display = 'none';
-        document.getElementById('bulk-estimate-progress-section').style.display = 'block';
-        document.getElementById('bulk-estimate-submit').style.display = 'none';
-        document.getElementById('bulk-estimate-cancel').innerHTML = '<span class="fa fa-stop"></span> Interrompre';
-        document.getElementById('bulk-progress-title').innerHTML = '<span class="fa fa-spinner fa-spin"></span> Création en cours...';
-
-        const total = selectedProducts.length;
-        let completed = 0;
-        let successCount = 0;
-        let errorCount = 0;
-
-        updateProgressBar(0, total, 'Démarrage...');
-
-        // Process in batches of MAX_CONCURRENT
-        const products = [...selectedProducts];
-
-        while (products.length > 0 && isProcessing) {
-            const batch = products.splice(0, MAX_CONCURRENT);
-            const batchIndex = total - products.length - batch.length;
-
-            updateProgressBar(completed, total, `Traitement par lot de ${batch.length}...`);
-
-            // Process batch in parallel
-            const results = await Promise.all(
-                batch.map((product, i) => createEstimateViaIframe(product, batchIndex + i))
-            );
-
-            // Count results
-            results.forEach(result => {
-                completed++;
-                if (result.success) {
-                    successCount++;
-                } else {
-                    errorCount++;
-                }
-            });
-
-            updateProgressBar(completed, total, `${completed}/${total} traités`);
-
-            // Small delay between batches
-            if (products.length > 0) {
-                await new Promise(r => setTimeout(r, 1000));
-            }
-        }
-
-        // Done
-        isProcessing = false;
-
-        document.getElementById('bulk-progress-title').innerHTML = '<span class="fa fa-check-circle"></span> Terminé';
-        document.getElementById('bulk-progress-current').textContent = 'Terminé !';
-
-        const resultDiv = document.getElementById('bulk-estimate-result');
-        resultDiv.style.display = 'block';
-
-        if (errorCount === 0) {
-            resultDiv.className = 'bulk-estimate-result success';
-            resultDiv.innerHTML = `<span class="fa fa-check-circle"></span> ${successCount} devis créé(s) avec succès !`;
-        } else if (successCount === 0) {
-            resultDiv.className = 'bulk-estimate-result error';
-            resultDiv.innerHTML = `<span class="fa fa-times-circle"></span> Échec de la création des ${errorCount} devis`;
-        } else {
-            resultDiv.className = 'bulk-estimate-result partial';
-            resultDiv.innerHTML = `<span class="fa fa-exclamation-triangle"></span> ${successCount} succès, ${errorCount} erreur(s)`;
-        }
-
-        const cancelBtn = document.getElementById('bulk-estimate-cancel');
-        cancelBtn.innerHTML = '<span class="fa fa-check"></span> Fermer et rafraîchir';
-        cancelBtn.onclick = () => {
-            closeModal();
-            location.reload();
-        };
-    }
-
-    // Init
-    function init() {
-        clientId = getClientId();
-        injectStyles();
-        createModal();
-        createTriggerButton();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+    renderRows();
+  }
+  for(const [key,id,check] of globalSettings) {
+    const select=$('#'+id,modal),checkbox=$('#'+check,modal);
+    checkbox.onchange=()=>{if(checkbox.checked)applyGlobals();else renderRows();};
+    select.onchange=()=>{checkbox.checked=true;applyGlobals();};
+  }
+  clear.onclick=()=>{rows=[];picked.clear();renderTypes();renderRows();};
+  all.onclick=()=>{$('#df-types',modal).querySelectorAll('.df-type').forEach(el=>{picked.add(el.value);el.checked=true;});syncRows();};
+  
+  $('#df-confirm',modal).closest('div').remove();
+  const run=$('#df-run',modal), halt=$('#df-stop',modal), close=$('#df-close',modal);
+  const actions=document.createElement('div');actions.className='df-actions';run.before(actions);actions.append(run);
+  halt.remove();header.append(close);close.textContent='×';close.title='Fermer';close.setAttribute('aria-label','Fermer la fenêtre');
+  const progress=document.createElement('div');progress.className='df-progress';progress.style.display='none';
+  progress.innerHTML='<div class="df-progress-title"><span id="df-progress-state">Préparation...</span><span id="df-progress-count">0/0</span></div><div class="df-progress-track"><div id="df-progress-fill"></div></div><div id="df-progress-detail" style="font-size:12px;color:#64748b">Initialisation</div>';
+  actions.after(progress);
+  function updateProgress(done,total,message,detail) {
+    progress.style.display='block';
+    $('#df-progress-count',modal).textContent=done+'/'+total;
+    $('#df-progress-fill',modal).style.width=(total?Math.round(100*done/total):0)+'%';
+    $('#df-progress-state',modal).textContent=message;
+    $('#df-progress-detail',modal).textContent=detail||'';
+  }
+  const search=$('#df-search',modal);search.placeholder='Rechercher un type de devis...';search.style.width='100%';
+  const log = s => { $('#df-log',modal).textContent += s+'\n'; };
+  function renderTypes() {
+    const search = $('#df-search',modal).value.toLowerCase();
+    $('#df-types',modal).innerHTML = TYPES.filter(x=>x[0].toLowerCase().includes(search)).map(([label,id])=>'<label style="font-size:12px"><input type="checkbox" class="df-type" value="'+id+'" '+(picked.has(String(id))?'checked':'')+'> '+escapeHTML(label)+'</label>').join('');
+    $('#df-types',modal).querySelectorAll('.df-type').forEach(el=>el.onchange=()=>{
+      if(el.checked)picked.add(el.value);else picked.delete(el.value);
+      syncRows();
+    });
+  }
+  function syncRows(){
+    rows=rows.filter(r=>picked.has(r.id));
+    TYPES.forEach(([label,id])=>{if(picked.has(String(id))&&!rows.some(r=>r.id===String(id)))rows.push({id:String(id),label,status:'current',referent:'',binome:'',company:''});});
+    applyGlobals();
+  }
+  function renderRows() {
+    $('#df-table',modal).innerHTML = '<thead><tr><th>Produit</th><th>Etat</th><th>Referent</th><th>Binome</th><th>Compagnie</th><th></th></tr></thead><tbody>'+rows.map((r,i)=>'<tr data-i="'+i+'"><td>'+escapeHTML(r.label)+'</td><td><select data-key="status">'+options(STATUTS,r.status)+'</select></td><td><select data-key="referent">'+options(REFERENTS,r.referent)+'</select></td><td><select data-key="binome">'+options(BINOMES,r.binome)+'</select></td><td><select data-key="company">'+options([['','Aucune compagnie'],...COMPANIES],r.company)+'</select></td><td><button data-remove="'+i+'" type="button">Retirer</button></td></tr>').join('')+'</tbody>';
+    $('#df-table',modal).querySelectorAll('select[data-key]').forEach(sel=>{
+      const index=Number(sel.closest('tr').dataset.i), key=sel.dataset.key;
+      const setting=globalSettings.find(s=>s[0]===key);
+      sel.disabled=false;
+      sel.onchange=()=>{
+        rows[index][key]=sel.value;
+        if(setting)$('#'+setting[2],modal).checked=false;
+        renderRows();
+      };
+    });
+    $('#df-table',modal).querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{const removed=rows[Number(b.dataset.remove)];picked.delete(removed.id);rows.splice(Number(b.dataset.remove),1);renderTypes();renderRows();});
+    rows.forEach((r,i)=>loadCompanies(r).then(list=>{
+      if(rows[i]!==r)return;
+      const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);
+      if(sel) {setOptions(sel,[['','Aucune compagnie'],...list],r.company);sel.disabled=false; sel.onchange=()=>{r.company=sel.value;$('#df-same-company',modal).checked=false;renderRows();};}
+    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel){setOptions(sel,[['','Aucune compagnie'],...COMPANIES],r.company);sel.disabled=false;sel.onchange=()=>{r.company=sel.value;$('#df-same-company',modal).checked=false;renderRows();};}log('Compagnies '+r.label+' : liste de secours utilisée'); }));
+  }
+  async function loadCompanies(row) {
+    if(companyCache.has(row.id)) return companyCache.get(row.id);
+    const response=await fetch('/fr/scripts/companies_product_types/companies_product_types_get_companies.php',{
+      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:new URLSearchParams({product_type_id:row.id})
+    });
+    if(!response.ok)throw Error('Chargement compagnies HTTP '+response.status);
+    const body=await response.text();
+    let companies=[];
+    const html=new DOMParser().parseFromString(body,'text/html');
+    const inputs=Array.from(html.querySelectorAll('input[name="companies[]"]'));
+    if(inputs.length) {
+      companies=inputs.map(input=>{
+        const label=html.querySelector('label[for="'+input.id+'"]');
+        return [String(input.value), (label?.textContent||input.closest('label')?.textContent||'').trim()];
+      }).filter(item=>item[0]&&item[1]);
     } else {
-        init();
+      try {
+        let json=JSON.parse(body);
+        if(typeof json==='string'){const temp=new DOMParser().parseFromString(json,'text/html');companies=Array.from(temp.querySelectorAll('input[name="companies[]"]')).map(el=>[el.value,temp.querySelector('label[for="'+el.id+'"]')?.textContent?.trim()||'']).filter(x=>x[0]&&x[1]);}
+        if(typeof json==='object' && typeof json.html==='string'){const temp=new DOMParser().parseFromString(json.html,'text/html');companies=Array.from(temp.querySelectorAll('input[name="companies[]"]')).map(el=>[el.value,temp.querySelector('label[for="'+el.id+'"]')?.textContent?.trim()||'']).filter(x=>x[0]&&x[1]);}
+        const source=Array.isArray(json)?json:Array.isArray(json.companies)?json.companies:Array.isArray(json.data)?json.data:null;
+        if(source)companies=source.map(x=>[String(x.id??x.company_id??x.value??''),String(x.name??x.company_name??x.label??'')]).filter(x=>x[0]&&x[1]);
+      } catch {}
     }
+    if(!companies.length)companies=COMPANIES;
+    companyCache.set(row.id,companies);
+    return companies;
+  }
+  async function createOne(row) {
+    // Charger une vraie page de creation pour conserver les champs caches et valeurs propres a la session.
+    const path='/fr/scripts/estimates/estimates_manage.php?client_id='+encodeURIComponent(clientId)+'&estimate_id=0';
+    const page=await fetch(path,{credentials:'same-origin'});
+    if(!page.ok)throw Error('Formulaire HTTP '+page.status);
+    const doc=new DOMParser().parseFromString(await page.text(),'text/html');
+    const form=Array.from(doc.forms).find(f=>f.querySelector('[name="estimate[product_type_id]"]'));
+    if(!form)throw Error('Formulaire de creation introuvable (connexion expiree ?)');
+    const data=new FormData(form);
+    const set=(key,val)=>{data.set(key,String(val));};
+    set('mcut',data.get('mcut')||'');
+    set('action','send');set('estimate[estimate_id]','');set('estimate[client_id]',clientId);
+    set('estimate[product_type_id]',row.id);set('selectItemestimate[product_type_id]',row.id);
+    set('estimate[status]',row.status);set('selectItemestimate[status]',row.status);
+    set('estimate[referent_user_id]',row.referent);set('selectItemestimate[referent_user_id]',row.referent);
+    set('estimate[custom_12]',row.binome);set('selectItemestimate[custom_12]',row.binome);
+    set('estimate[input_date]',today());set('estimate[custom_14]',today());
+    data.delete('companies[]'); if(row.company)data.append('companies[]',row.company);
+    // La requete observee est urlencoded ; conserver tous les noms de champs repetes.
+    const params=new URLSearchParams();
+    for(const [k,v] of data.entries()) {if(typeof v!=='string')throw Error('Champ fichier non gere');params.append(k,v);}
+    // Le POST observe utilise client_id=0 et estimate_id=0 dans l'URL ; conserver l'action originale si presente.
+    const target=new URL(form.getAttribute('action')||'/fr/scripts/estimates/estimates_manage.php?client_id=0&estimate_id=0',page.url);
+    if(target.origin!==location.origin||!target.pathname.endsWith('/estimates_manage.php'))throw Error('Destination de formulaire inattendue');
+    const response=await fetch(target.href,{method:'POST',credentials:'same-origin',redirect:'follow',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params});
+    if(!response.ok)throw Error('Enregistrement HTTP '+response.status);
+    const resultUrl=new URL(response.url,location.href);
+    const match=resultUrl.searchParams.get('open')?.match(/^element_toggle_estimate_(\d+)$/);
+    if(!match)throw Error('Enregistrement non confirme : verifier la fiche client avant toute relance');
+    const resultId=match[1];
+    if(resultUrl.searchParams.get('id')!==clientId)throw Error('Retour vers mauvais client');
+    return resultId;
+  }
+  $('#df-search',modal).oninput=renderTypes;
+  $('#df-close',modal).onclick=()=>{if(!busy)modal.style.display='none';};
 
+  $('#df-run',modal).onclick=async()=>{
+    if(busy||!rows.length)return alert('Sélectionne au moins un type de devis.');
+    if(!confirm('Créer '+rows.length+' nouveau(x) devis pour ce client ?'))return;
+    busy=true;stop=false;
+    const copy=rows.map(x=>({...x}));
+    let success=0, failed=false;
+    run.disabled=true;
+    updateProgress(0,copy.length,'Création en cours','Préparation du premier devis…');
+    try {
+      for(const row of copy){
+        if(stop)break;
+        updateProgress(success,copy.length,'Création en cours',row.label+'…');
+        log('Création : '+row.label);
+        try {
+          const id=await createOne(row);
+          success++;
+          log('Créé : '+row.label+' — devis '+id);
+          updateProgress(success,copy.length,'Création en cours',row.label+' créé — '+success+' sur '+copy.length);
+        } catch(err) {
+          failed=true;
+          log('À vérifier : '+row.label+' — '+err.message);
+          log('Arrêt de sécurité pour éviter les doublons.');
+          break;
+        }
+      }
+    } finally {
+      busy=false;run.disabled=false;
+      const complete=!failed&&!stop&&success===copy.length;
+      updateProgress(success,copy.length,complete?'Tous les devis sont créés':failed?'Vérification nécessaire':'Création interrompue',complete?'Actualisation de la fiche client…':'Vérifie les devis dans Modulr avant toute relance.');
+      log('Terminé : '+success+'/'+copy.length+' devis confirmés.');
+      if(complete) location.reload();
+      else { log('Tu peux fermer avec la croix, puis vérifier la fiche client.'); }
+    }
+  };
+  renderTypes();
+  function install() {if($('#devis-fetch-trigger'))return;const button=document.createElement('button');button.id='devis-fetch-trigger';button.type='button';button.textContent='Devis en masse (Fetch beta)';button.style.cssText='padding:8px 12px;margin:8px;background:#215c7f;color:white;border:0;cursor:pointer;border-radius:4px';button.onclick=()=>{modal.style.display='flex';};const place=document.querySelector('.entity_info_block_1')||document.body;place.prepend(button);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
