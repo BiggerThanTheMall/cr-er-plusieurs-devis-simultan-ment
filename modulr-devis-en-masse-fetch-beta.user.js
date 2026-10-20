@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Devis en masse Fetch (beta)
 // @namespace    https://github.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment
-// @version      2.0.0-beta.8
+// @version      2.0.0-beta.9
 // @description  Creation de devis sur la session Modulr de chaque collaborateur, sans cookies integres.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
@@ -57,7 +57,10 @@
 #devis-fetch-overlay .df-global-settings>strong{grid-column:1/-1}
 #devis-fetch-overlay .df-global-label{min-width:0;display:grid;grid-template-columns:18px 1fr;grid-template-rows:auto auto;gap:5px 6px;align-items:center}
 #devis-fetch-overlay .df-global-label label{grid-column:1/-1;display:flex;gap:7px;align-items:center;cursor:pointer;font-weight:500} 
-#devis-fetch-overlay .df-global-label select{grid-column:1/-1;width:100%;max-width:none!important;min-width:0;pointer-events:auto}
+#devis-fetch-overlay .df-global-label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:7px!important;min-width:0}
+#devis-fetch-overlay .df-global-label label{display:flex!important;align-items:center;gap:7px;min-height:22px}
+#devis-fetch-overlay .df-global-label select{display:block!important;position:relative!important;grid-column:auto!important;flex:0 0 auto!important;width:100%!important;max-width:100%!important;min-width:0!important;min-height:38px!important;height:38px!important;padding:7px 10px!important;font-size:13px!important;opacity:1!important;pointer-events:auto!important;cursor:pointer!important;appearance:auto!important;-webkit-appearance:menulist!important}
+#devis-fetch-overlay .df-table-wrap select{min-height:36px!important;height:36px!important;appearance:auto!important;-webkit-appearance:menulist!important;pointer-events:auto!important}
 #devis-fetch-overlay .df-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #devis-fetch-overlay #df-close{border:0;background:transparent;font-size:26px;line-height:1;padding:4px 9px;color:#597083}
 #devis-fetch-overlay #df-close:hover{background:#edf3f7}
@@ -86,7 +89,7 @@
   all.textContent='Tout sélectionner (filtre)';
   const clear=document.createElement('button');clear.type='button';clear.textContent='Tout désélectionner';addBar.append(clear);
   const global=document.createElement('div');global.className='df-actions';global.style.cssText='padding:10px 12px;background:#f2f7fa;border:1px solid #dae6ef;border-radius:8px';
-  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <div class="df-global-label"><label for="df-same-status"><input type="checkbox" id="df-same-status"> Même état</label><select id="df-global-status" disabled></select></div> <div class="df-global-label"><label for="df-same-referent"><input type="checkbox" id="df-same-referent"> Même référent</label><select id="df-global-referent" disabled></select></div> <div class="df-global-label"><label for="df-same-binome"><input type="checkbox" id="df-same-binome"> Même binôme</label><select id="df-global-binome" disabled></select></div> <div class="df-global-label"><label for="df-same-company"><input type="checkbox" id="df-same-company"> Même compagnie</label><select id="df-global-company" disabled></select></div>';
+  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <div class="df-global-label"><label for="df-same-status"><input type="checkbox" id="df-same-status"> Même état</label><select id="df-global-status"></select></div> <div class="df-global-label"><label for="df-same-referent"><input type="checkbox" id="df-same-referent"> Même référent</label><select id="df-global-referent"></select></div> <div class="df-global-label"><label for="df-same-binome"><input type="checkbox" id="df-same-binome"> Même binôme</label><select id="df-global-binome"></select></div> <div class="df-global-label"><label for="df-same-company"><input type="checkbox" id="df-same-company"> Même compagnie</label><select id="df-global-company"></select></div>';
   global.classList.add('df-global-settings');
   tableWrap.before(global);
   setOptions($('#df-global-status',modal),[['','Sans changement'],...STATUTS],'');
@@ -102,8 +105,8 @@
   }
   for(const [key,id,check] of globalSettings) {
     const select=$('#'+id,modal),checkbox=$('#'+check,modal);
-    checkbox.onchange=()=>{select.disabled=!checkbox.checked;if(checkbox.checked)applyGlobals();else renderRows();};
-    select.onchange=()=>{if(checkbox.checked)applyGlobals();};
+    checkbox.onchange=()=>{if(checkbox.checked)applyGlobals();else renderRows();};
+    select.onchange=()=>{checkbox.checked=true;applyGlobals();};
   }
   clear.onclick=()=>{rows=[];picked.clear();renderTypes();renderRows();};
   all.onclick=()=>{$('#df-types',modal).querySelectorAll('.df-type').forEach(el=>{picked.add(el.value);el.checked=true;});syncRows();};
@@ -142,15 +145,19 @@
     $('#df-table',modal).querySelectorAll('select[data-key]').forEach(sel=>{
       const index=Number(sel.closest('tr').dataset.i), key=sel.dataset.key;
       const setting=globalSettings.find(s=>s[0]===key);
-      if(setting && $('#'+setting[2],modal).checked)sel.disabled=true;
-      sel.onchange=()=>{rows[index][key]=sel.value;};
+      sel.disabled=false;
+      sel.onchange=()=>{
+        rows[index][key]=sel.value;
+        if(setting)$('#'+setting[2],modal).checked=false;
+        renderRows();
+      };
     });
     $('#df-table',modal).querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{const removed=rows[Number(b.dataset.remove)];picked.delete(removed.id);rows.splice(Number(b.dataset.remove),1);renderTypes();renderRows();});
     rows.forEach((r,i)=>loadCompanies(r).then(list=>{
       if(rows[i]!==r)return;
       const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);
-      if(sel) {setOptions(sel,[['','Aucune compagnie'],...list],r.company);sel.disabled=$('#df-same-company',modal).checked; sel.onchange=()=>r.company=sel.value;}
-    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel){setOptions(sel,[['','Aucune compagnie'],...COMPANIES],r.company);sel.disabled=$('#df-same-company',modal).checked;sel.onchange=()=>r.company=sel.value;}log('Compagnies '+r.label+' : liste de secours utilisée'); }));
+      if(sel) {setOptions(sel,[['','Aucune compagnie'],...list],r.company);sel.disabled=false; sel.onchange=()=>{r.company=sel.value;$('#df-same-company',modal).checked=false;renderRows();};}
+    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel){setOptions(sel,[['','Aucune compagnie'],...COMPANIES],r.company);sel.disabled=false;sel.onchange=()=>{r.company=sel.value;$('#df-same-company',modal).checked=false;renderRows();};}log('Compagnies '+r.label+' : liste de secours utilisée'); }));
   }
   async function loadCompanies(row) {
     if(companyCache.has(row.id)) return companyCache.get(row.id);
