@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Devis en masse Fetch (beta)
 // @namespace    https://github.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment
-// @version      2.0.0-beta.7
+// @version      2.0.0-beta.8
 // @description  Creation de devis sur la session Modulr de chaque collaborateur, sans cookies integres.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
@@ -56,7 +56,8 @@
 #devis-fetch-overlay .df-global-settings{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px!important;align-items:end}
 #devis-fetch-overlay .df-global-settings>strong{grid-column:1/-1}
 #devis-fetch-overlay .df-global-label{min-width:0;display:grid;grid-template-columns:18px 1fr;grid-template-rows:auto auto;gap:5px 6px;align-items:center}
-#devis-fetch-overlay .df-global-label select{grid-column:1/-1;width:100%;max-width:none!important;min-width:0}
+#devis-fetch-overlay .df-global-label label{grid-column:1/-1;display:flex;gap:7px;align-items:center;cursor:pointer;font-weight:500} 
+#devis-fetch-overlay .df-global-label select{grid-column:1/-1;width:100%;max-width:none!important;min-width:0;pointer-events:auto}
 #devis-fetch-overlay .df-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #devis-fetch-overlay #df-close{border:0;background:transparent;font-size:26px;line-height:1;padding:4px 9px;color:#597083}
 #devis-fetch-overlay #df-close:hover{background:#edf3f7}
@@ -85,7 +86,7 @@
   all.textContent='Tout sélectionner (filtre)';
   const clear=document.createElement('button');clear.type='button';clear.textContent='Tout désélectionner';addBar.append(clear);
   const global=document.createElement('div');global.className='df-actions';global.style.cssText='padding:10px 12px;background:#f2f7fa;border:1px solid #dae6ef;border-radius:8px';
-  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <label class="df-global-label"><input type="checkbox" id="df-same-status"> Même état <select id="df-global-status" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-referent"> Même référent <select id="df-global-referent" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-binome"> Même binôme <select id="df-global-binome" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-company"> Même compagnie <select id="df-global-company" disabled></select></label>';
+  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <div class="df-global-label"><label for="df-same-status"><input type="checkbox" id="df-same-status"> Même état</label><select id="df-global-status" disabled></select></div> <div class="df-global-label"><label for="df-same-referent"><input type="checkbox" id="df-same-referent"> Même référent</label><select id="df-global-referent" disabled></select></div> <div class="df-global-label"><label for="df-same-binome"><input type="checkbox" id="df-same-binome"> Même binôme</label><select id="df-global-binome" disabled></select></div> <div class="df-global-label"><label for="df-same-company"><input type="checkbox" id="df-same-company"> Même compagnie</label><select id="df-global-company" disabled></select></div>';
   global.classList.add('df-global-settings');
   tableWrap.before(global);
   setOptions($('#df-global-status',modal),[['','Sans changement'],...STATUTS],'');
