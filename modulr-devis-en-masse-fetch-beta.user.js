@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Devis en masse Fetch (beta)
 // @namespace    https://github.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment
-// @version      2.0.0-beta.6
+// @version      2.0.0-beta.7
 // @description  Creation de devis sur la session Modulr de chaque collaborateur, sans cookies integres.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
@@ -48,7 +48,22 @@
 #devis-fetch-overlay .df-progress-title{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:#2b526b}
 #devis-fetch-overlay .df-global-label{display:flex;align-items:center;gap:5px;white-space:nowrap}
 #devis-fetch-overlay .df-global-label select:disabled{opacity:.45;background:#eef1f4}
-#devis-fetch-overlay .df-actions select{max-width:165px}
+#devis-fetch-overlay .df-actions select{max-width:185px}
+#devis-fetch-overlay>section{height:min(94vh,1050px)!important;gap:9px!important;position:relative;padding:20px 24px!important}
+#devis-fetch-overlay #df-types{flex:0 0 165px;min-height:120px;max-height:165px!important;overflow-y:auto!important;scrollbar-gutter:stable;overscroll-behavior:contain}
+#devis-fetch-overlay .df-table-wrap{min-height:230px;flex:1 1 320px;overflow:auto!important;scrollbar-gutter:stable;overscroll-behavior:contain}
+#devis-fetch-overlay .df-table-wrap table{min-width:950px}
+#devis-fetch-overlay .df-global-settings{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px!important;align-items:end}
+#devis-fetch-overlay .df-global-settings>strong{grid-column:1/-1}
+#devis-fetch-overlay .df-global-label{min-width:0;display:grid;grid-template-columns:18px 1fr;grid-template-rows:auto auto;gap:5px 6px;align-items:center}
+#devis-fetch-overlay .df-global-label select{grid-column:1/-1;width:100%;max-width:none!important;min-width:0}
+#devis-fetch-overlay .df-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#devis-fetch-overlay #df-close{border:0;background:transparent;font-size:26px;line-height:1;padding:4px 9px;color:#597083}
+#devis-fetch-overlay #df-close:hover{background:#edf3f7}
+#devis-fetch-overlay .df-actions{flex-shrink:0}
+#devis-fetch-overlay .df-progress{flex-shrink:0}
+@media(max-width:850px){#devis-fetch-overlay .df-global-settings{grid-template-columns:repeat(2,minmax(0,1fr))}#devis-fetch-overlay>section{padding:14px!important}}
+
 
 @media(max-width:850px){#devis-fetch-overlay #df-types{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 `;
@@ -62,6 +77,7 @@
   document.body.appendChild(modal);
   const section=modal.firstElementChild;
   const heading=section.querySelector('h2'); heading.textContent='Création de devis en masse';
+  const header=document.createElement('div');header.className='df-header';heading.before(header);header.append(heading);
   section.querySelector('p').textContent='Sélectionnez vos produits, puis définissez le référent, le binôme et la compagnie pour chaque devis.';
   const table=$('#df-table',modal), tableWrap=table.parentElement; tableWrap.classList.add('df-table-wrap');
   const add=$('#df-add',modal), all=$('#df-all',modal);
@@ -70,6 +86,7 @@
   const clear=document.createElement('button');clear.type='button';clear.textContent='Tout désélectionner';addBar.append(clear);
   const global=document.createElement('div');global.className='df-actions';global.style.cssText='padding:10px 12px;background:#f2f7fa;border:1px solid #dae6ef;border-radius:8px';
   global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <label class="df-global-label"><input type="checkbox" id="df-same-status"> Même état <select id="df-global-status" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-referent"> Même référent <select id="df-global-referent" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-binome"> Même binôme <select id="df-global-binome" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-company"> Même compagnie <select id="df-global-company" disabled></select></label>';
+  global.classList.add('df-global-settings');
   tableWrap.before(global);
   setOptions($('#df-global-status',modal),[['','Sans changement'],...STATUTS],'');
   setOptions($('#df-global-referent',modal),REFERENTS,'');
@@ -90,9 +107,10 @@
   clear.onclick=()=>{rows=[];picked.clear();renderTypes();renderRows();};
   all.onclick=()=>{$('#df-types',modal).querySelectorAll('.df-type').forEach(el=>{picked.add(el.value);el.checked=true;});syncRows();};
   
-  $('#df-confirm',modal).closest('div').classList.add('df-confirm');
+  $('#df-confirm',modal).closest('div').remove();
   const run=$('#df-run',modal), halt=$('#df-stop',modal), close=$('#df-close',modal);
-  const actions=document.createElement('div');actions.className='df-actions';run.before(actions);actions.append(run,halt,close);
+  const actions=document.createElement('div');actions.className='df-actions';run.before(actions);actions.append(run);
+  halt.remove();header.append(close);close.textContent='×';close.title='Fermer';close.setAttribute('aria-label','Fermer la fenêtre');
   const progress=document.createElement('div');progress.className='df-progress';progress.style.display='none';
   progress.innerHTML='<div class="df-progress-title"><span id="df-progress-state">Préparation...</span><span id="df-progress-count">0/0</span></div><div class="df-progress-track"><div id="df-progress-fill"></div></div><div id="df-progress-detail" style="font-size:12px;color:#64748b">Initialisation</div>';
   actions.after(progress);
@@ -196,7 +214,7 @@
   }
   $('#df-search',modal).oninput=renderTypes;
   $('#df-close',modal).onclick=()=>{if(!busy)modal.style.display='none';};
-  $('#df-stop',modal).onclick=()=>{stop=true;log('Interruption demandee.');};
+
   $('#df-run',modal).onclick=async()=>{
     if(busy||!rows.length)return alert('Sélectionne au moins un type de devis.');
     if(!confirm('Créer '+rows.length+' nouveau(x) devis pour ce client ?'))return;
@@ -228,10 +246,7 @@
       updateProgress(success,copy.length,complete?'Tous les devis sont créés':failed?'Vérification nécessaire':'Création interrompue',complete?'Actualisation de la fiche client…':'Vérifie les devis dans Modulr avant toute relance.');
       log('Terminé : '+success+'/'+copy.length+' devis confirmés.');
       if(complete) location.reload();
-      else {
-        close.textContent='Fermer et actualiser';
-        close.onclick=()=>location.reload();
-      }
+      else { log('Tu peux fermer avec la croix, puis vérifier la fiche client.'); }
     }
   };
   renderTypes();
