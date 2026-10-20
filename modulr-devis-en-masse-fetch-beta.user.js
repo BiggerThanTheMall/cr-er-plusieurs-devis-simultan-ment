@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Devis en masse Fetch (beta)
 // @namespace    https://github.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment
-// @version      2.0.0-beta.1
+// @version      2.0.0-beta.2
 // @description  Creation de devis sur la session Modulr de chaque collaborateur, sans cookies integres.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
@@ -19,11 +19,46 @@
   let busy = false, stop = false, rows = [], companyCache = new Map();
   const today = () => { const d = new Date(); return [String(d.getDate()).padStart(2,'0'),String(d.getMonth()+1).padStart(2,'0'),d.getFullYear()].join('/'); };
   const options = (list, v='') => list.map(([id,label]) => '<option value="'+escapeHTML(id)+'"'+(String(id)===String(v)?' selected':'')+'>'+escapeHTML(label)+'</option>').join('');
+  const style=document.createElement('style');
+  style.textContent=`
+#devis-fetch-overlay{backdrop-filter:blur(2px)}
+#devis-fetch-overlay>section{box-sizing:border-box;display:flex;flex-direction:column;gap:12px!important;width:min(1250px,96vw)!important;height:min(90vh,950px)!important;padding:24px!important;border-radius:14px!important;box-shadow:0 22px 70px #0004;overflow:hidden!important}
+#devis-fetch-overlay h2{margin:0 0 5px;font-size:22px;font-weight:650;color:#173b55}
+#devis-fetch-overlay p{margin:0;color:#64748b}
+#devis-fetch-overlay input:not([type=checkbox]),#devis-fetch-overlay select{box-sizing:border-box;border:1px solid #d6dee7;background:#fff;border-radius:7px;padding:9px 11px;color:#26394b;min-width:0}
+#devis-fetch-overlay button{border:1px solid #c8d4df;border-radius:7px;background:#f7f9fc;color:#294b63;padding:9px 13px;font-weight:600;cursor:pointer}
+#devis-fetch-overlay button:hover{background:#eaf2f7}
+#devis-fetch-overlay #df-run{background:#216389;color:white;border-color:#216389}
+#devis-fetch-overlay #df-types{border:1px solid #e0e7ef;border-radius:10px;min-height:110px;max-height:175px!important;padding:12px;align-content:start;gap:9px!important;overscroll-behavior:contain}
+#devis-fetch-overlay #df-types label{display:flex;gap:8px;align-items:center;padding:7px 9px;background:#f6f9fc;border-radius:6px;font-size:12px!important;min-height:18px;cursor:pointer}
+#devis-fetch-overlay #df-types label:hover{background:#e9f2f8}
+#devis-fetch-overlay .df-table-wrap{min-height:130px;flex:1;overflow:auto;overscroll-behavior:contain;border:1px solid #dce5ee;border-radius:10px}
+#devis-fetch-overlay table{min-width:860px;border-collapse:separate!important;border-spacing:0}
+#devis-fetch-overlay th{position:sticky;top:0;z-index:1;text-align:left;background:#eaf1f6;padding:12px;color:#37516a;font-size:12px}
+#devis-fetch-overlay td{padding:10px 7px;border-top:1px solid #e9eef3;vertical-align:middle;font-size:12px}
+#devis-fetch-overlay td select{width:100%;max-width:100%}
+#devis-fetch-overlay tr:nth-child(even) td{background:#f9fbfc}
+#devis-fetch-overlay #df-log{flex:0 0 auto;max-height:105px!important;min-height:35px;overflow:auto;border-radius:8px;margin:0!important}
+#devis-fetch-overlay .df-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+#devis-fetch-overlay .df-confirm{padding:6px 0}
+@media(max-width:850px){#devis-fetch-overlay #df-types{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+`;
+  document.head.appendChild(style);
   const modal = document.createElement('div');
   modal.id = 'devis-fetch-overlay';
   modal.style.cssText = 'display:none;position:fixed;inset:0;background:#0008;z-index:2147483000;align-items:center;justify-content:center;font-family:Arial,sans-serif';
   modal.innerHTML = '<section style="background:white;width:min(1250px,96vw);height:min(90vh,950px);overflow:auto;padding:18px;border-radius:8px;color:#243745"><h2>Creation de devis en masse - Fetch (beta)</h2><p>Chaque devis est cree dans votre session Modulr. Ne pas lancer simultanement deux creations pour le meme client.</p><input id="df-search" placeholder="Rechercher un produit" style="padding:8px;width:95%"><div id="df-types" style="max-height:145px;overflow:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0"></div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse" id="df-table"></table></div><p><button id="df-add" type="button">Ajouter les produits coches</button> <button id="df-all" type="button">Tout cocher (filtre)</button></p><div style="margin:12px 0"><label><input type="checkbox" id="df-confirm"> Je confirme la creation reelle des devis selectionnes</label></div><button id="df-run" type="button">Creer les devis</button> <button id="df-stop" type="button">Interrompre apres le devis en cours</button> <button id="df-close" type="button">Fermer</button><pre id="df-log" style="white-space:pre-wrap;max-height:180px;overflow:auto;background:#f3f5f7;padding:10px"></pre></section>';
   document.body.appendChild(modal);
+  const section=modal.firstElementChild;
+  const heading=section.querySelector('h2'); heading.textContent='Création de devis en masse';
+  section.querySelector('p').textContent='Sélectionnez vos produits, puis définissez le référent, le binôme et la compagnie pour chaque devis.';
+  const table=$('#df-table',modal), tableWrap=table.parentElement; tableWrap.classList.add('df-table-wrap');
+  const add=$('#df-add',modal), all=$('#df-all',modal);
+  const addBar=document.createElement('div');addBar.className='df-actions';add.parentElement.replaceWith(addBar);addBar.append(add,all);
+  $('#df-confirm',modal).closest('div').classList.add('df-confirm');
+  const run=$('#df-run',modal), halt=$('#df-stop',modal), close=$('#df-close',modal);
+  const actions=document.createElement('div');actions.className='df-actions';run.before(actions);actions.append(run,halt,close);
+  const search=$('#df-search',modal);search.placeholder='Rechercher un type de devis...';search.style.width='100%';
   const log = s => { $('#df-log',modal).textContent += s+'\n'; };
   const setOptions = (sel,list,val) => { sel.innerHTML=options(list,val); };
   function renderTypes() {
@@ -41,7 +76,7 @@
       if(rows[i]!==r)return;
       const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);
       if(sel) {setOptions(sel,[['','Selectionner...'],...list],r.company); sel.onchange=()=>r.company=sel.value;}
-    }).catch(()=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel)sel.innerHTML='<option value="">Indisponible</option>'; }));
+    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel)sel.innerHTML='<option value="">Compagnies indisponibles</option>';log('Compagnies '+r.label+' : '+err.message); }));
   }
   async function loadCompanies(row) {
     if(companyCache.has(row.id)) return companyCache.get(row.id);
@@ -49,11 +84,23 @@
       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:new URLSearchParams({product_type_id:row.id})
     });
     if(!response.ok)throw Error('Chargement compagnies HTTP '+response.status);
-    const json=await response.json();
-    const source=Array.isArray(json)?json:Array.isArray(json.companies)?json.companies:Array.isArray(json.data)?json.data:null;
-    if(!source)throw Error('Format de la liste compagnies non reconnu');
-    const companies=source.map(x=>[String(x.id??x.company_id??x.value??''),String(x.name??x.company_name??x.label??'')]).filter(x=>x[0]&&x[1]);
-    if(!companies.length)throw Error('Aucune compagnie exploitable');
+    const body=await response.text();
+    let companies=[];
+    const html=new DOMParser().parseFromString(body,'text/html');
+    const inputs=Array.from(html.querySelectorAll('input[name="companies[]"]'));
+    if(inputs.length) {
+      companies=inputs.map(input=>{
+        const label=html.querySelector('label[for="'+input.id+'"]');
+        return [String(input.value), (label?.textContent||input.closest('label')?.textContent||'').trim()];
+      }).filter(item=>item[0]&&item[1]);
+    } else {
+      try {
+        const json=JSON.parse(body);
+        const source=Array.isArray(json)?json:Array.isArray(json.companies)?json.companies:Array.isArray(json.data)?json.data:null;
+        if(source)companies=source.map(x=>[String(x.id??x.company_id??x.value??''),String(x.name??x.company_name??x.label??'')]).filter(x=>x[0]&&x[1]);
+      } catch {}
+    }
+    if(!companies.length)throw Error('Aucune compagnie reconnue dans la réponse Modulr');
     companyCache.set(row.id,companies);
     return companies;
   }
@@ -78,7 +125,8 @@
     // La requete observee est urlencoded ; conserver tous les noms de champs repetes.
     const params=new URLSearchParams();
     for(const [k,v] of data.entries()) {if(typeof v!=='string')throw Error('Champ fichier non gere');params.append(k,v);}
-    const target=new URL(form.getAttribute('action')||path,location.origin);
+    // Le POST observe utilise client_id=0 et estimate_id=0 dans l'URL ; conserver l'action originale si presente.
+    const target=new URL(form.getAttribute('action')||'/fr/scripts/estimates/estimates_manage.php?client_id=0&estimate_id=0',page.url);
     if(target.origin!==location.origin||!target.pathname.endsWith('/estimates_manage.php'))throw Error('Destination de formulaire inattendue');
     const response=await fetch(target.href,{method:'POST',credentials:'same-origin',redirect:'follow',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params});
     if(!response.ok)throw Error('Enregistrement HTTP '+response.status);
