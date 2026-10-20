@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Modulr - Devis en masse Fetch (beta)
 // @namespace    https://github.com/BiggerThanTheMall/cr-er-plusieurs-devis-simultan-ment
-// @version      2.0.0-beta.5
+// @version      2.0.0-beta.6
 // @description  Creation de devis sur la session Modulr de chaque collaborateur, sans cookies integres.
 // @match        https://courtage.modulr.fr/fr/scripts/clients/clients_card.php*
 // @grant        none
@@ -42,6 +42,14 @@
 #devis-fetch-overlay #df-log{flex:0 0 auto;max-height:105px!important;min-height:35px;overflow:auto;border-radius:8px;margin:0!important}
 #devis-fetch-overlay .df-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 #devis-fetch-overlay .df-confirm{padding:6px 0}
+#devis-fetch-overlay .df-progress{border:1px solid #dce7f0;border-radius:10px;padding:12px;background:#f8fbfd}
+#devis-fetch-overlay .df-progress-track{height:9px;border-radius:99px;background:#dfe9f1;overflow:hidden;margin:8px 0}
+#devis-fetch-overlay #df-progress-fill{height:100%;width:0%;background:#2784b6;transition:width .35s ease;border-radius:99px}
+#devis-fetch-overlay .df-progress-title{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:#2b526b}
+#devis-fetch-overlay .df-global-label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+#devis-fetch-overlay .df-global-label select:disabled{opacity:.45;background:#eef1f4}
+#devis-fetch-overlay .df-actions select{max-width:165px}
+
 @media(max-width:850px){#devis-fetch-overlay #df-types{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 `;
   document.head.appendChild(style);
@@ -61,14 +69,23 @@
   all.textContent='Tout sélectionner (filtre)';
   const clear=document.createElement('button');clear.type='button';clear.textContent='Tout désélectionner';addBar.append(clear);
   const global=document.createElement('div');global.className='df-actions';global.style.cssText='padding:10px 12px;background:#f2f7fa;border:1px solid #dae6ef;border-radius:8px';
-  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <label>État <select id="df-global-status"></select></label> <label>Référent <select id="df-global-referent"></select></label> <label>Binôme <select id="df-global-binome"></select></label> <label>Compagnie <select id="df-global-company"></select></label>';
+  global.innerHTML='<strong style="margin-right:9px">Appliquer à tous</strong> <label class="df-global-label"><input type="checkbox" id="df-same-status"> Même état <select id="df-global-status" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-referent"> Même référent <select id="df-global-referent" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-binome"> Même binôme <select id="df-global-binome" disabled></select></label> <label class="df-global-label"><input type="checkbox" id="df-same-company"> Même compagnie <select id="df-global-company" disabled></select></label>';
   tableWrap.before(global);
   setOptions($('#df-global-status',modal),[['','Sans changement'],...STATUTS],'');
   setOptions($('#df-global-referent',modal),REFERENTS,'');
   setOptions($('#df-global-binome',modal),BINOMES,'');
   setOptions($('#df-global-company',modal),[['','Sans changement'],...COMPANIES],'');
-  for(const [id,key] of [['df-global-status','status'],['df-global-referent','referent'],['df-global-binome','binome'],['df-global-company','company']]){
-    $('#'+id,modal).onchange=e=>{if(!e.target.value)return;rows.forEach(r=>r[key]=e.target.value);renderRows();};
+  const globalSettings=[['status','df-global-status','df-same-status'],['referent','df-global-referent','df-same-referent'],['binome','df-global-binome','df-same-binome'],['company','df-global-company','df-same-company']];
+  function applyGlobals() {
+    for(const [key,id,check] of globalSettings) {
+      if($('#'+check,modal).checked) rows.forEach(row=>{row[key]=$('#'+id,modal).value;});
+    }
+    renderRows();
+  }
+  for(const [key,id,check] of globalSettings) {
+    const select=$('#'+id,modal),checkbox=$('#'+check,modal);
+    checkbox.onchange=()=>{select.disabled=!checkbox.checked;if(checkbox.checked)applyGlobals();else renderRows();};
+    select.onchange=()=>{if(checkbox.checked)applyGlobals();};
   }
   clear.onclick=()=>{rows=[];picked.clear();renderTypes();renderRows();};
   all.onclick=()=>{$('#df-types',modal).querySelectorAll('.df-type').forEach(el=>{picked.add(el.value);el.checked=true;});syncRows();};
@@ -76,6 +93,16 @@
   $('#df-confirm',modal).closest('div').classList.add('df-confirm');
   const run=$('#df-run',modal), halt=$('#df-stop',modal), close=$('#df-close',modal);
   const actions=document.createElement('div');actions.className='df-actions';run.before(actions);actions.append(run,halt,close);
+  const progress=document.createElement('div');progress.className='df-progress';progress.style.display='none';
+  progress.innerHTML='<div class="df-progress-title"><span id="df-progress-state">Préparation...</span><span id="df-progress-count">0/0</span></div><div class="df-progress-track"><div id="df-progress-fill"></div></div><div id="df-progress-detail" style="font-size:12px;color:#64748b">Initialisation</div>';
+  actions.after(progress);
+  function updateProgress(done,total,message,detail) {
+    progress.style.display='block';
+    $('#df-progress-count',modal).textContent=done+'/'+total;
+    $('#df-progress-fill',modal).style.width=(total?Math.round(100*done/total):0)+'%';
+    $('#df-progress-state',modal).textContent=message;
+    $('#df-progress-detail',modal).textContent=detail||'';
+  }
   const search=$('#df-search',modal);search.placeholder='Rechercher un type de devis...';search.style.width='100%';
   const log = s => { $('#df-log',modal).textContent += s+'\n'; };
   function renderTypes() {
@@ -89,20 +116,22 @@
   function syncRows(){
     rows=rows.filter(r=>picked.has(r.id));
     TYPES.forEach(([label,id])=>{if(picked.has(String(id))&&!rows.some(r=>r.id===String(id)))rows.push({id:String(id),label,status:'current',referent:'',binome:'',company:''});});
-    renderRows();
+    applyGlobals();
   }
   function renderRows() {
     $('#df-table',modal).innerHTML = '<thead><tr><th>Produit</th><th>Etat</th><th>Referent</th><th>Binome</th><th>Compagnie</th><th></th></tr></thead><tbody>'+rows.map((r,i)=>'<tr data-i="'+i+'"><td>'+escapeHTML(r.label)+'</td><td><select data-key="status">'+options(STATUTS,r.status)+'</select></td><td><select data-key="referent">'+options(REFERENTS,r.referent)+'</select></td><td><select data-key="binome">'+options(BINOMES,r.binome)+'</select></td><td><select data-key="company">'+options([['','Aucune compagnie'],...COMPANIES],r.company)+'</select></td><td><button data-remove="'+i+'" type="button">Retirer</button></td></tr>').join('')+'</tbody>';
     $('#df-table',modal).querySelectorAll('select[data-key]').forEach(sel=>{
       const index=Number(sel.closest('tr').dataset.i), key=sel.dataset.key;
+      const setting=globalSettings.find(s=>s[0]===key);
+      if(setting && $('#'+setting[2],modal).checked)sel.disabled=true;
       sel.onchange=()=>{rows[index][key]=sel.value;};
     });
     $('#df-table',modal).querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{const removed=rows[Number(b.dataset.remove)];picked.delete(removed.id);rows.splice(Number(b.dataset.remove),1);renderTypes();renderRows();});
     rows.forEach((r,i)=>loadCompanies(r).then(list=>{
       if(rows[i]!==r)return;
       const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);
-      if(sel) {setOptions(sel,[['','Aucune compagnie'],...list],r.company); sel.onchange=()=>r.company=sel.value;}
-    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel){setOptions(sel,[['','Aucune compagnie'],...COMPANIES],r.company);sel.onchange=()=>r.company=sel.value;}log('Compagnies '+r.label+' : liste de secours utilisée'); }));
+      if(sel) {setOptions(sel,[['','Aucune compagnie'],...list],r.company);sel.disabled=$('#df-same-company',modal).checked; sel.onchange=()=>r.company=sel.value;}
+    }).catch(err=>{const sel=$('#df-table tr[data-i="'+i+'"] select[data-key="company"]',modal);if(sel){setOptions(sel,[['','Aucune compagnie'],...COMPANIES],r.company);sel.disabled=$('#df-same-company',modal).checked;sel.onchange=()=>r.company=sel.value;}log('Compagnies '+r.label+' : liste de secours utilisée'); }));
   }
   async function loadCompanies(row) {
     if(companyCache.has(row.id)) return companyCache.get(row.id);
@@ -169,14 +198,41 @@
   $('#df-close',modal).onclick=()=>{if(!busy)modal.style.display='none';};
   $('#df-stop',modal).onclick=()=>{stop=true;log('Interruption demandee.');};
   $('#df-run',modal).onclick=async()=>{
-    if(busy||!$('#df-confirm',modal).checked||!rows.length)return alert('Selectionner des devis et confirmer leur creation.');
-    // Modulr autorise l'absence de compagnie : ne pas bloquer l'ensemble du lot.
-    if(!confirm('Creer '+rows.length+' nouveau(x) devis sur la fiche client '+clientId+' ?'))return;
-    busy=true;stop=false;let success=0;const copy=rows.map(x=>({...x}));
-    try {for(const row of copy){if(stop)break;log('Creation : '+row.label);
-      try {const id=await createOne(row);success++;log('Cree : '+row.label+' - devis '+id);}
-      catch(err) {log('A verifier : '+row.label+' - '+err.message);log('Arret de securite pour eviter les doublons.');break;}
-    }}finally {busy=false;log('Termine : '+success+'/'+copy.length+' confirms. Actualiser la fiche client pour verifier.');}
+    if(busy||!rows.length)return alert('Sélectionne au moins un type de devis.');
+    if(!confirm('Créer '+rows.length+' nouveau(x) devis pour ce client ?'))return;
+    busy=true;stop=false;
+    const copy=rows.map(x=>({...x}));
+    let success=0, failed=false;
+    run.disabled=true;
+    updateProgress(0,copy.length,'Création en cours','Préparation du premier devis…');
+    try {
+      for(const row of copy){
+        if(stop)break;
+        updateProgress(success,copy.length,'Création en cours',row.label+'…');
+        log('Création : '+row.label);
+        try {
+          const id=await createOne(row);
+          success++;
+          log('Créé : '+row.label+' — devis '+id);
+          updateProgress(success,copy.length,'Création en cours',row.label+' créé — '+success+' sur '+copy.length);
+        } catch(err) {
+          failed=true;
+          log('À vérifier : '+row.label+' — '+err.message);
+          log('Arrêt de sécurité pour éviter les doublons.');
+          break;
+        }
+      }
+    } finally {
+      busy=false;run.disabled=false;
+      const complete=!failed&&!stop&&success===copy.length;
+      updateProgress(success,copy.length,complete?'Tous les devis sont créés':failed?'Vérification nécessaire':'Création interrompue',complete?'Actualisation de la fiche client…':'Vérifie les devis dans Modulr avant toute relance.');
+      log('Terminé : '+success+'/'+copy.length+' devis confirmés.');
+      if(complete) location.reload();
+      else {
+        close.textContent='Fermer et actualiser';
+        close.onclick=()=>location.reload();
+      }
+    }
   };
   renderTypes();
   function install() {if($('#devis-fetch-trigger'))return;const button=document.createElement('button');button.id='devis-fetch-trigger';button.type='button';button.textContent='Devis en masse (Fetch beta)';button.style.cssText='padding:8px 12px;margin:8px;background:#215c7f;color:white;border:0;cursor:pointer;border-radius:4px';button.onclick=()=>{modal.style.display='flex';};const place=document.querySelector('.entity_info_block_1')||document.body;place.prepend(button);}
